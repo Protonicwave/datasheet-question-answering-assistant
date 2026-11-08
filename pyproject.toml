@@ -5,7 +5,9 @@ description = "Answers questions about Bosch Sensortec datasheets, showing only 
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pypdfium2==5.15.1",
+]
 
 [project.scripts]
 datasheet-assistant = "datasheet_assistant.cli:main"
@@ -41,3 +43,8 @@ files = ["src", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[[tool.mypy.overrides]]
+# pypdfium2 ships no type information; its calls are confined to ingest.py.
+module = ["pypdfium2"]
+ignore_missing_imports = true

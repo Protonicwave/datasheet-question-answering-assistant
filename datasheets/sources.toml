@@ -1,0 +1,32 @@
+# Bosch Sensortec datasheets used by the assistant. The PDFs are not
+# redistributed: ingest downloads each one and checks it against its hash.
+
+[[datasheet]]
+name = "bme280"
+url = "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf"
+sha256 = "a2ccdb449fec94380742fe8eec851a11d9bd4142252d332b34682b4deecd7d89"
+
+[[datasheet]]
+name = "bmp390"
+url = "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp390-ds002.pdf"
+sha256 = "8dcf0f74449cb1627e865c7f24d328b76c204d8b9621091ede8c6869fb393e48"
+
+[[datasheet]]
+name = "bmi270"
+url = "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi270-ds000.pdf"
+sha256 = "0dab40659d3a8598af76a0b2da1fd8a216aeb87254541632c89145f974694af7"
+
+[[datasheet]]
+name = "bmm350"
+url = "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmm350-ds001.pdf"
+sha256 = "a79338230dca5dade0233e1cc975f5fcfed4f149610f56c0a37cef14fcd59100"
+
+[[datasheet]]
+name = "bma456"
+url = "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bma456-ds000.pdf"
+sha256 = "300c360943af1284861a3bcfad86fa55b1f8e8b227fcf47aba21b0d77d1ab8ea"
+
+[[datasheet]]
+name = "bhi360"
+url = "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bhi360-ds000.pdf"
+sha256 = "794ce6302241ce56b4cf4be01b5e1ce2d15110f67ececa1aaf34f8bdad43539b"
