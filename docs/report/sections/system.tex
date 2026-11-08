@@ -31,8 +31,9 @@ Each question passes through retrieval, an answer with citations, the check and 
     \draw[flow] ([xshift=5mm]revise.north) -- node[label, right] {recheck} ([xshift=5mm]check.south);
     \draw[flow] (revise) -- node[label, above] {fail} (withheld);
     \draw[flow] (answer) -- node[label, left] {unanswerable} (none);
+    \draw[flow] (revise.south) -- ++(0,-5mm) -| node[label, pos=0.25, below] {unanswerable} (none.south);
   \end{tikzpicture}
-  \caption{The path of one question. Only an answer that passes the check is shown. A rejected answer is sent back once with the reason it failed, and a revision that also fails is withheld.}
+  \caption{The path of one question. Only an answer that passes the check is shown. A rejected answer is sent back once with the reason it failed; a revision that also fails is withheld, and one that finds no answer ends as the datasheet not saying.}
   \label{fig:pipeline}
 \end{figure}
 
@@ -44,17 +45,17 @@ One normaliser prepares text for both search and the check, so the two never dis
 
 \subsection{Retrieval}
 
-Each page is cut into chunks of whole lines, merged up to about 300 words and never spanning two pages, and each chunk keeps its datasheet and page. Search ranks chunks with BM25~\cite{robertson2009}, with $k_1 = 1.2$ and $b = 0.75$, and passes the top eight, about 2,400 words, to the model. BM25 was chosen over embeddings because datasheet questions turn on exact terms such as register names, and because it is deterministic. When a question names a part, only that part's datasheet is searched. Without this rule a BMP390 question ranked BMA456 and BMI270 pages first: every page header repeats the part number, so as a search term it barely separates one datasheet from another. A question that shares no term with any chunk is declared unanswerable without a model call.
+Each page is cut into chunks of whole lines, each closing at the first line end past 300 words and never spanning two pages, and each chunk keeps its datasheet and page. Search ranks chunks with BM25~\cite{robertson2009}, with $k_1 = 1.2$ and $b = 0.75$, and passes the top eight, about 2,400 words, to the model. BM25 was chosen over embeddings because datasheet questions turn on exact terms such as register names, and because it is deterministic. When a question names a part, only that part's datasheet is searched. Without this rule a BMP390 question ranked BMA456 and BMI270 pages first: every page header repeats the part number, so as a search term it barely separates one datasheet from another. A question that shares no term with any chunk is declared unanswerable without a model call.
 
 \subsection{Answer}
 
-The model, \texttt{claude-sonnet-5-5}, receives the excerpts, each marked with its datasheet and page, and returns a structured reply: whether the excerpts answer the question, a short answer, and one to three citations, each naming a datasheet and page and quoting a passage of at least four words. The prompt asks for numbers written as the datasheet writes them, no unit conversions, and no number repeated from the question unless a quote contains it. A request the API refuses or truncates, a failed request, or a reply that does not match the schema is recorded as an error, never as a sign that the datasheet does not say.
+The model, \texttt{claude-sonnet-5-5}, receives the excerpts, each marked with its datasheet and page, and returns a structured reply: whether the excerpts answer the question, a short answer, and citations, one to three as the prompt asks, each naming a datasheet and page and quoting a passage of at least four words. The prompt asks for numbers written as the datasheet writes them, no unit conversions, and no number repeated from the question unless a quote contains it. A request the API refuses or truncates, a failed request, or a reply that does not match the schema is recorded as an error, never as a sign that the datasheet does not say.
 
 \subsection{The check}
 
-The check is a pure function of the answer and the page texts. An answer passes only if it cites at least one passage; every citation names a datasheet and page that exist; every quote is at least four words long and appears, after normalisation, on the page it cites; and every number in the answer appears in at least one of its quotes. The four-word minimum stops a quote such as \enquote{\qty{3.6}{\volt}}, which appears on many pages, from passing as evidence. The numbers are pooled across citations because one answer may combine values from up to three passages.
+The check is a pure function of the answer and the page texts. An answer passes only if it cites at least one passage; every citation names a datasheet and page that exist; every quote is at least four words long and appears, after normalisation, on the page it cites; and every number in the answer appears in at least one of its quotes. The four-word minimum stops a quote such as \enquote{\qty{3.6}{\volt}}, which appears on many pages, from passing as evidence. The numbers are pooled across citations because one answer may combine values from several passages.
 
-Numbers are extracted as signed decimals, scientific notation and hexadecimal (\texttt{0x76}). A digit attached to letters, as in \texttt{BME280} or \texttt{I2C}, is not a number, and an \texttt{x} between digits separates two values, so \texttt{2.5x3.0} yields 2.5 and 3.0. Decimals compare by value with their sign, so 3.30 matches 3.3 but $-40$ does not match 40; hexadecimal compares as text, ignoring case.
+Numbers are extracted as signed decimals, scientific notation and hexadecimal (\texttt{0x76}). A digit that follows a letter, as in \texttt{BME280} or \texttt{I2C}, is not a number, and an \texttt{x} between digits separates two values, so \texttt{2.5x3.0} yields 2.5 and 3.0. Decimals compare by value with their sign, so 3.30 matches 3.3 but $-40$ does not match 40; hexadecimal compares as text, ignoring case.
 
 \subsection{Revision and outcomes}
 

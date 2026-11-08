@@ -1,18 +1,18 @@
 \section{Reproducing the results}
 \label{sec:reproduction}
 
-The repository's README gives installation. A run needs the datasheets ingested and an Anthropic API key in the environment variable \texttt{ANTHROPIC\_API\_KEY}. One command then produces each run:
+The repository's README gives installation. A run needs the datasheets ingested and an Anthropic API key in the environment variable \texttt{ANTHROPIC\_API\_KEY}. At the current code, these commands produce a run of the held-out set:
 
 \begin{lstlisting}[language={}]
 uv run datasheet-assistant ingest
 uv run datasheet-assistant evaluate --questions eval/held_out.jsonl --runs 3
 \end{lstlisting}
 
-Each run writes a new directory under \texttt{eval/runs/} holding every answer with its citations and revisions (\texttt{answers.jsonl}), the score of each question per arm and run (\texttt{scores.csv}) and the counts per arm (\texttt{summary.csv}, \texttt{summary.md}). \Cref{tab:runs} lists the committed runs. A rerun makes new model requests, so its counts will differ from these within roughly the spread the tables show.
+Each run writes a new directory under \texttt{eval/runs/} holding every answer with its citations and revisions (\texttt{answers.jsonl}), the score of each question per arm and run (\texttt{scores.csv}) and the counts per arm (\texttt{summary.csv}, \texttt{summary.md}). \Cref{tab:runs} lists the committed runs. A rerun makes new model requests, so its counts will differ from these. The development runs used earlier code: the second ran at \texttt{31d8549}, with up to two revisions, and the first predates arm D; its code commit was not recorded, and its results commit \texttt{be39273} also changed the code.
 
 \begin{table}[htbp]
   \centering
-  \caption{Committed evaluation runs. The held-out set was committed at \texttt{4b9dc7c} and run once at that commit.}
+  \caption{Committed evaluation runs and the commits that added their results. The held-out set was committed at \texttt{4b9dc7c} and run once at that commit.}
   \label{tab:runs}
   \begin{tabular}{llll}
     \toprule
