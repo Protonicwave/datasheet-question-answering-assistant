@@ -10,6 +10,7 @@ from datasheet_assistant.answer import (
     MODEL,
     AnswerError,
     Unanswerable,
+    answer_from_memory,
     answer_question,
 )
 from datasheet_assistant.retrieve import Chunk
@@ -137,3 +138,28 @@ def test_api_failure_is_an_error() -> None:
 
     with pytest.raises(AnswerError, match="request failed"):
         answer_question(replying(failure, status=500), QUESTION, CHUNKS)
+
+
+def test_memory_answer_sends_no_excerpts_and_parses_alike() -> None:
+    sent: list[dict[str, Any]] = []
+    reply = {"answerable": True, "answer": "3.6 V", "citations": []}
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        sent.append(json.loads(request.content))
+        return httpx2.Response(200, json=message(json.dumps(reply)))
+
+    result = answer_from_memory(fake_client(respond), QUESTION)
+
+    [body] = sent
+    prompt = body["messages"][0]["content"]
+    assert result == Answer(text="3.6 V", citations=())
+    assert QUESTION in prompt
+    assert "<excerpt" not in prompt
+    assert "excerpts supplied" not in body["system"]
+
+
+def test_memory_answer_failure_is_an_error() -> None:
+    failure = {"type": "error", "error": {"type": "api_error", "message": "down"}}
+
+    with pytest.raises(AnswerError, match="request failed"):
+        answer_from_memory(replying(failure, status=500), QUESTION)

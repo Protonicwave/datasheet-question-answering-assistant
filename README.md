@@ -37,6 +37,31 @@ quotes. If the datasheets do not answer the question, or the answer fails
 the check, it prints "The datasheet does not say." with the reason an answer
 was withheld.
 
+## Evaluate
+
+Run the question set in `eval/questions.jsonl` through three arms: the model
+alone (A), the model answering from retrieved excerpts (B), and B's answers
+passed through the check (C). Each arm runs three times by default:
+
+```sh
+uv run datasheet-assistant evaluate --runs 3
+```
+
+Results go to a new directory under `eval/runs/`: every answer with its
+citations (`answers.jsonl`), the score of each question per arm and run
+(`scores.csv`), and the counts per arm (`summary.csv`, `summary.md`).
+Answers scored `unplaced` state only some of the expected values, or none
+of the numbers, and are left for a person to judge.
+
+Each line of the question file is one JSON object. An answerable question
+lists the numbers and keywords a correct answer must state and the pages
+that state them; an unanswerable one has only `answerable: false`:
+
+```json
+{"id": "bmp390-max-vddio", "question": "What is the maximum interface supply voltage VDDIO of the BMP390?", "datasheet": "bmp390", "answerable": true, "pages": [3, 7], "numbers": ["3.6"], "keywords": []}
+{"id": "bme280-unit-price", "question": "What is the unit price of the BME280 in quantities of 1,000?", "datasheet": "bme280", "answerable": false}
+```
+
 ## Test
 
 ```sh

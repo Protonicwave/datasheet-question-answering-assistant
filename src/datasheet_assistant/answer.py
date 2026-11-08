@@ -34,6 +34,15 @@ If the excerpts do not state the answer, set answerable to false, leave the \
 answer empty and give no citations. Do not use knowledge from outside the \
 excerpts."""
 
+# Same output schema as the excerpt prompt, so both arms parse alike.
+MEMORY_PROMPT = """\
+You answer questions about Bosch Sensortec sensor datasheets from what you \
+know of them. No datasheet text is supplied.
+
+If you know the answer, set answerable to true and give a short answer. If \
+you do not know it, set answerable to false and leave the answer empty. In \
+both cases give no citations."""
+
 ANSWER_SCHEMA: dict[str, object] = {
     "type": "object",
     "properties": {
@@ -87,13 +96,30 @@ def answer_question(
 
     Raises AnswerError if no usable answer comes back.
     """
+    return _request(client, SYSTEM_PROMPT, _prompt(question, chunks))
+
+
+def answer_from_memory(
+    client: anthropic.Anthropic, question: str
+) -> Answer | Unanswerable:
+    """Ask Claude to answer `question` from what it already knows, with no
+    excerpts. The baseline the excerpts and the check are measured against.
+
+    Raises AnswerError if no usable answer comes back.
+    """
+    return _request(client, MEMORY_PROMPT, f"Question: {question}")
+
+
+def _request(
+    client: anthropic.Anthropic, system: str, content: str
+) -> Answer | Unanswerable:
     try:
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_OUTPUT_TOKENS,
-            system=SYSTEM_PROMPT,
+            system=system,
             output_config=OUTPUT_CONFIG,
-            messages=[{"role": "user", "content": _prompt(question, chunks)}],
+            messages=[{"role": "user", "content": content}],
         )
     except anthropic.APIError as error:
         raise AnswerError(f"Claude API request failed: {error}") from error

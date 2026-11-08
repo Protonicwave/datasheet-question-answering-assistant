@@ -21,13 +21,23 @@ def ask(
 ) -> Verified | Rejected | Unanswerable:
     """Answer `question` from the datasheets, showing only verified answers.
 
+    Raises AnswerError if the answerer gives no usable answer.
+    """
+    reply = answer_from_excerpts(question, index, answerer)
+    if isinstance(reply, Unanswerable):
+        return reply
+    return verify(reply, pages)
+
+
+def answer_from_excerpts(
+    question: str, index: Index, answerer: Answerer
+) -> Answer | Unanswerable:
+    """Retrieve excerpts for `question` and answer from them, unchecked.
+
     A question that shares no term with any excerpt is unanswerable without
     a model call. Raises AnswerError if the answerer gives no usable answer.
     """
     chunks = index.search(question, TOP_CHUNKS)
     if not chunks:
         return Unanswerable()
-    reply = answerer(question, chunks)
-    if isinstance(reply, Unanswerable):
-        return reply
-    return verify(reply, pages)
+    return answerer(question, chunks)

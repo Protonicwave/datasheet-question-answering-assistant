@@ -64,3 +64,24 @@ def test_ask_before_ingest_says_to_ingest(
 
     assert main(["ask", "What is the supply voltage?"]) == 1
     assert "run the ingest command first" in capsys.readouterr().err
+
+
+def test_evaluate_without_api_key_names_the_variable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    assert main(["evaluate"]) == 1
+    assert "ANTHROPIC_API_KEY is not set" in capsys.readouterr().err
+
+
+def test_evaluate_before_ingest_says_to_ingest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["evaluate", "--runs", "1"]) == 1
+    assert "run the ingest command first" in capsys.readouterr().err
