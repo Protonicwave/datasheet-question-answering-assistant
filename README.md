@@ -7,6 +7,9 @@ answer must appear in the quote. An answer that fails is sent back to the
 model with the reason, once; if the revision does not pass, no answer is
 shown.
 
+The method and the held-out results are written up in
+[docs/report/report.pdf](docs/report/report.pdf).
+
 ## Install
 
 On Windows, double-click `run.bat`. It installs uv and Node.js if they are
@@ -104,6 +107,23 @@ own `numbers` and `keywords`, for answers that give the same value another
 way, such as `0.5 hPa` for `50 Pa`. An answer is correct if it states every
 value of any one of these sets. Only the first set has to appear on the
 listed pages.
+
+## Report
+
+The report's source is in `docs/report/`. Building it needs a TeX
+distribution with LuaLaTeX and latexmk (MiKTeX or TeX Live); on Windows,
+run latexmk from Git Bash, since MiKTeX ships no Perl. The results figure
+is drawn from the held-out run with matplotlib:
+
+```sh
+uv run --group docs python docs/report/figures/results.py
+cd docs/report
+latexmk
+cp build/main.pdf report.pdf
+```
+
+`report.pdf` is committed so the report can be read without TeX; rebuild
+and commit it after changing the source.
 
 ## Test
 
