@@ -132,9 +132,10 @@ and commit it after changing the source. `laboratory.sty`,
 copies of a shared house style (version 2026/11/07); replace them whole
 rather than editing them.
 
-The guide in `docs/guide/` builds the same way, with no figure: run
-`latexmk` there and copy `build/main.pdf` to `guide.pdf`. It must stay on
-one page, and its figures must match the report's.
+The guide in `docs/guide/` builds the same way: run `latexmk` there and
+copy `build/main.pdf` to `guide.pdf`. It must stay on one page, which
+`pdfinfo build/main.pdf` confirms, and its numbers must match the
+report's.
 
 ## Test
 
