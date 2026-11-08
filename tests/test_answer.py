@@ -9,16 +9,20 @@ import pytest
 from datasheet_assistant.answer import (
     MODEL,
     AnswerError,
+    RejectedAttempt,
     Unanswerable,
     answer_from_memory,
     answer_question,
 )
 from datasheet_assistant.retrieve import Chunk
-from datasheet_assistant.verify import Answer, Citation
+from datasheet_assistant.verify import Answer, Citation, Rejected, RejectionReason
 
 CHUNKS = [Chunk("bmp390", 7, "Sensor supply voltage VDD 1.65 1.8 3.6 V")]
 QUESTION = "What is the maximum supply voltage of the BMP390?"
 
+RECORDED_ANSWER_CITATIONS = (
+    Citation("bmp390", 7, "Sensor supply voltage VDD 1.65 1.8 3.6 V"),
+)
 RECORDED_ANSWER = {
     "answerable": True,
     "answer": "The maximum supply voltage VDD is 3.6 V.",
@@ -63,12 +67,12 @@ def replying(body: dict[str, Any], status: int = 200) -> anthropic.Anthropic:
 
 def test_parses_recorded_answer_into_citations() -> None:
     result = answer_question(
-        replying(message(json.dumps(RECORDED_ANSWER))), QUESTION, CHUNKS
+        replying(message(json.dumps(RECORDED_ANSWER))), QUESTION, CHUNKS, ()
     )
 
     assert result == Answer(
         text="The maximum supply voltage VDD is 3.6 V.",
-        citations=(Citation("bmp390", 7, "Sensor supply voltage VDD 1.65 1.8 3.6 V"),),
+        citations=RECORDED_ANSWER_CITATIONS,
     )
 
 
@@ -79,7 +83,7 @@ def test_sends_question_and_excerpts_with_their_pages_and_answer_schema() -> Non
         sent.append(json.loads(request.content))
         return httpx2.Response(200, json=message(json.dumps(RECORDED_ANSWER)))
 
-    answer_question(fake_client(respond), QUESTION, CHUNKS)
+    answer_question(fake_client(respond), QUESTION, CHUNKS, ())
 
     [body] = sent
     prompt = body["messages"][0]["content"]
@@ -93,7 +97,7 @@ def test_sends_question_and_excerpts_with_their_pages_and_answer_schema() -> Non
 def test_returns_unanswerable_when_model_says_excerpts_do_not_answer() -> None:
     reply = {"answerable": False, "answer": "", "citations": []}
 
-    result = answer_question(replying(message(json.dumps(reply))), QUESTION, CHUNKS)
+    result = answer_question(replying(message(json.dumps(reply))), QUESTION, CHUNKS, ())
 
     assert result == Unanswerable()
 
@@ -122,7 +126,7 @@ def test_returns_unanswerable_when_model_says_excerpts_do_not_answer() -> None:
 )
 def test_rejects_malformed_answer(text: str) -> None:
     with pytest.raises(AnswerError, match="malformed answer"):
-        answer_question(replying(message(text)), QUESTION, CHUNKS)
+        answer_question(replying(message(text)), QUESTION, CHUNKS, ())
 
 
 @pytest.mark.parametrize("stop_reason", ["refusal", "max_tokens"])
@@ -130,14 +134,14 @@ def test_incomplete_response_is_an_error_not_a_refusal(stop_reason: str) -> None
     reply = message(json.dumps(RECORDED_ANSWER), stop_reason=stop_reason)
 
     with pytest.raises(AnswerError, match=stop_reason):
-        answer_question(replying(reply), QUESTION, CHUNKS)
+        answer_question(replying(reply), QUESTION, CHUNKS, ())
 
 
 def test_api_failure_is_an_error() -> None:
     failure = {"type": "error", "error": {"type": "api_error", "message": "down"}}
 
     with pytest.raises(AnswerError, match="request failed"):
-        answer_question(replying(failure, status=500), QUESTION, CHUNKS)
+        answer_question(replying(failure, status=500), QUESTION, CHUNKS, ())
 
 
 def test_memory_answer_sends_no_excerpts_and_parses_alike() -> None:
@@ -163,3 +167,36 @@ def test_memory_answer_failure_is_an_error() -> None:
 
     with pytest.raises(AnswerError, match="request failed"):
         answer_from_memory(replying(failure, status=500), QUESTION)
+
+
+def test_revision_continues_the_conversation_with_each_rejection() -> None:
+    sent: list[dict[str, Any]] = []
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        sent.append(json.loads(request.content))
+        return httpx2.Response(200, json=message(json.dumps(RECORDED_ANSWER)))
+
+    first = Answer("VDD is at most 3.60 V at 25 °C.", RECORDED_ANSWER_CITATIONS)
+    second = Answer("VDD is at most 3.6 V at 25 °C.", RECORDED_ANSWER_CITATIONS)
+    rejected = (
+        RejectedAttempt(
+            first,
+            Rejected(RejectionReason.NUMBER_NOT_IN_QUOTES, "answer states 25"),
+        ),
+        RejectedAttempt(
+            second,
+            Rejected(RejectionReason.QUOTE_TOO_SHORT, "quote has 2 words"),
+        ),
+    )
+
+    answer_question(fake_client(respond), QUESTION, CHUNKS, rejected)
+
+    [body] = sent
+    roles = [turn["role"] for turn in body["messages"]]
+    assert roles == ["user", "assistant", "user", "assistant", "user"]
+    assert QUESTION in body["messages"][0]["content"]
+    earlier = json.loads(body["messages"][1]["content"])
+    assert earlier["answer"] == "VDD is at most 3.60 V at 25 °C."
+    assert earlier["citations"][0]["page"] == 7
+    assert "number_not_in_quotes: answer states 25" in body["messages"][2]["content"]
+    assert "quote_too_short: quote has 2 words" in body["messages"][4]["content"]

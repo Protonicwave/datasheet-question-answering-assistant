@@ -1,7 +1,9 @@
 from collections.abc import Sequence
 
-from datasheet_assistant.answer import Unanswerable
-from datasheet_assistant.pipeline import ask
+import pytest
+
+from datasheet_assistant.answer import AnswerError, RejectedAttempt, Unanswerable
+from datasheet_assistant.pipeline import MAX_REVISIONS, ask, check_with_retry
 from datasheet_assistant.retrieve import Chunk, Index, chunk_pages
 from datasheet_assistant.verify import (
     Answer,
@@ -22,22 +24,37 @@ QUESTION = "What is the I2C slave address of the BME280 when SDO is on GND?"
 QUOTE = "Connecting SDO to GND results in slave address 1110110 (0x76)"
 
 
-class FakeAnswerer:
-    def __init__(self, reply: Answer | Unanswerable) -> None:
-        self.reply = reply
-        self.excerpts: list[Chunk] = []
+VERIFIABLE = Answer("The address is 0x76.", (Citation("bme280", 2, QUOTE),))
+UNVERIFIABLE = Answer("The address is 0x77.", (Citation("bme280", 2, QUOTE),))
 
-    def __call__(self, question: str, chunks: Sequence[Chunk]) -> Answer | Unanswerable:
+
+class FakeAnswerer:
+    """Gives its replies in order, repeating the last, and records what it
+    was sent."""
+
+    def __init__(self, *replies: Answer | Unanswerable | AnswerError) -> None:
+        self.replies = list(replies)
+        self.excerpts: list[Chunk] = []
+        self.histories: list[tuple[RejectedAttempt, ...]] = []
+
+    def __call__(
+        self,
+        question: str,
+        chunks: Sequence[Chunk],
+        rejected: Sequence[RejectedAttempt],
+    ) -> Answer | Unanswerable:
         self.excerpts.extend(chunks)
-        return self.reply
+        self.histories.append(tuple(rejected))
+        reply = self.replies[min(len(self.histories), len(self.replies)) - 1]
+        if isinstance(reply, AnswerError):
+            raise reply
+        return reply
 
 
 def test_verified_answer_reaches_the_user() -> None:
-    reply = Answer("The address is 0x76.", (Citation("bme280", 2, QUOTE),))
+    outcome = ask(QUESTION, INDEX, PAGES, FakeAnswerer(VERIFIABLE))
 
-    outcome = ask(QUESTION, INDEX, PAGES, FakeAnswerer(reply))
-
-    assert outcome == Verified(reply)
+    assert outcome == Verified(VERIFIABLE)
 
 
 def test_answerer_sees_retrieved_excerpts() -> None:
@@ -48,13 +65,20 @@ def test_answerer_sees_retrieved_excerpts() -> None:
     assert Chunk("bme280", 2, QUOTE) in answerer.excerpts
 
 
-def test_answer_failing_the_check_is_rejected() -> None:
-    reply = Answer("The address is 0x77.", (Citation("bme280", 2, QUOTE),))
+def test_answer_failing_every_revision_is_rejected() -> None:
+    answerer = FakeAnswerer(UNVERIFIABLE)
 
-    outcome = ask(QUESTION, INDEX, PAGES, FakeAnswerer(reply))
+    outcome = ask(QUESTION, INDEX, PAGES, answerer)
 
     assert isinstance(outcome, Rejected)
     assert outcome.reason == RejectionReason.NUMBER_NOT_IN_QUOTES
+    assert len(answerer.histories) == 1 + MAX_REVISIONS
+
+
+def test_ask_shows_an_answer_verified_on_revision() -> None:
+    outcome = ask(QUESTION, INDEX, PAGES, FakeAnswerer(UNVERIFIABLE, VERIFIABLE))
+
+    assert outcome == Verified(VERIFIABLE)
 
 
 def test_unanswerable_passes_through() -> None:
@@ -70,3 +94,58 @@ def test_question_matching_no_excerpt_is_unanswerable_without_asking() -> None:
 
     assert outcome == Unanswerable()
     assert answerer.excerpts == []
+
+
+def test_verified_first_answer_needs_no_revision() -> None:
+    answerer = FakeAnswerer()
+
+    checked = check_with_retry(QUESTION, (), VERIFIABLE, PAGES, answerer)
+
+    assert checked.verdict == Verified(VERIFIABLE)
+    assert checked.answer == VERIFIABLE
+    assert checked.rejected == ()
+    assert answerer.histories == []
+
+
+def test_rejected_answer_is_sent_back_with_the_rejection() -> None:
+    chunks = INDEX.search(QUESTION, 2)
+    answerer = FakeAnswerer(VERIFIABLE)
+
+    checked = check_with_retry(QUESTION, chunks, UNVERIFIABLE, PAGES, answerer)
+
+    assert checked.verdict == Verified(VERIFIABLE)
+    [attempt] = checked.rejected
+    assert attempt.answer == UNVERIFIABLE
+    assert attempt.rejection.reason == RejectionReason.NUMBER_NOT_IN_QUOTES
+    assert answerer.histories == [(attempt,)]
+    assert answerer.excerpts == list(chunks)
+
+
+def test_revisions_stop_at_the_bound_with_every_attempt_kept() -> None:
+    answerer = FakeAnswerer(UNVERIFIABLE)
+
+    checked = check_with_retry(QUESTION, (), UNVERIFIABLE, PAGES, answerer)
+
+    assert isinstance(checked.verdict, Rejected)
+    assert checked.answer == UNVERIFIABLE
+    assert len(checked.rejected) == MAX_REVISIONS
+    assert [len(history) for history in answerer.histories] == list(
+        range(1, MAX_REVISIONS + 1)
+    )
+
+
+def test_revision_marked_unanswerable_is_a_refusal() -> None:
+    checked = check_with_retry(
+        QUESTION, (), UNVERIFIABLE, PAGES, FakeAnswerer(Unanswerable())
+    )
+
+    assert checked.verdict == Unanswerable()
+    assert checked.answer is None
+    assert len(checked.rejected) == 1
+
+
+def test_failed_revision_request_raises() -> None:
+    answerer = FakeAnswerer(AnswerError("Claude API request failed: down"))
+
+    with pytest.raises(AnswerError, match="request failed"):
+        check_with_retry(QUESTION, (), UNVERIFIABLE, PAGES, answerer)

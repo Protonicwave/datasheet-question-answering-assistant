@@ -1,8 +1,9 @@
 """From a question to what the user is shown: retrieve, answer, verify."""
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 
-from datasheet_assistant.answer import Unanswerable
+from datasheet_assistant.answer import RejectedAttempt, Unanswerable
 from datasheet_assistant.retrieve import Chunk, Index
 from datasheet_assistant.verify import Answer, Rejected, Verified, verify
 
@@ -10,7 +11,22 @@ from datasheet_assistant.verify import Answer, Rejected, Verified, verify
 # or three places without burying the passage that answers.
 TOP_CHUNKS = 8
 
-type Answerer = Callable[[str, Sequence[Chunk]], Answer | Unanswerable]
+# Each revision is one more request on a question already answered once, so
+# a rejected answer costs at most 1 + MAX_REVISIONS requests.
+MAX_REVISIONS = 2
+
+type Answerer = Callable[
+    [str, Sequence[Chunk], Sequence[RejectedAttempt]], Answer | Unanswerable
+]
+
+
+@dataclass(frozen=True, slots=True)
+class Checked:
+    verdict: Verified | Rejected | Unanswerable
+    answer: Answer | None
+    """The last answer the model gave; None if it ended unanswerable."""
+    rejected: tuple[RejectedAttempt, ...]
+    """Earlier answers sent back for revision, oldest first."""
 
 
 def ask(
@@ -23,21 +39,49 @@ def ask(
 
     Raises AnswerError if the answerer gives no usable answer.
     """
-    reply = answer_from_excerpts(question, index, answerer)
+    chunks = index.search(question, TOP_CHUNKS)
+    reply = answer_from_excerpts(question, chunks, answerer)
     if isinstance(reply, Unanswerable):
         return reply
-    return verify(reply, pages)
+    return check_with_retry(question, chunks, reply, pages, answerer).verdict
 
 
 def answer_from_excerpts(
-    question: str, index: Index, answerer: Answerer
+    question: str, chunks: Sequence[Chunk], answerer: Answerer
 ) -> Answer | Unanswerable:
-    """Retrieve excerpts for `question` and answer from them, unchecked.
+    """Answer `question` from retrieved `chunks`, unchecked.
 
-    A question that shares no term with any excerpt is unanswerable without
-    a model call. Raises AnswerError if the answerer gives no usable answer.
+    With no chunks, the question shares no term with any excerpt and is
+    unanswerable without a model call. Raises AnswerError if the answerer
+    gives no usable answer.
     """
-    chunks = index.search(question, TOP_CHUNKS)
     if not chunks:
         return Unanswerable()
-    return answerer(question, chunks)
+    return answerer(question, chunks, ())
+
+
+def check_with_retry(
+    question: str,
+    chunks: Sequence[Chunk],
+    first: Answer,
+    pages: Mapping[str, Sequence[str]],
+    answerer: Answerer,
+) -> Checked:
+    """Verify `first`; while the check rejects, send the answer back with the
+    rejection, at most MAX_REVISIONS times. Every revision faces the same
+    check, so a revision is shown only if it passes.
+
+    Raises AnswerError if a revision request gives no usable answer.
+    """
+    rejected: list[RejectedAttempt] = []
+    answer = first
+    for _ in range(MAX_REVISIONS):
+        verdict = verify(answer, pages)
+        if isinstance(verdict, Verified):
+            return Checked(verdict, answer, tuple(rejected))
+        rejected.append(RejectedAttempt(answer, verdict))
+        reply = answerer(question, chunks, tuple(rejected))
+        if isinstance(reply, Unanswerable):
+            return Checked(reply, None, tuple(rejected))
+        answer = reply
+    return Checked(verify(answer, pages), answer, tuple(rejected))

@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import anthropic
-from anthropic.types import OutputConfigParam
+from anthropic.types import MessageParam, OutputConfigParam
 
 from datasheet_assistant.retrieve import Chunk
-from datasheet_assistant.verify import Answer, Citation
+from datasheet_assistant.verify import Answer, Citation, Rejected
 
 MODEL = "claude-sonnet-5-5"
 MAX_OUTPUT_TOKENS = 16000
@@ -33,6 +33,16 @@ numbers inside words too, such as "7-bit".
 If the excerpts do not state the answer, set answerable to false, leave the \
 answer empty and give no citations. Do not use knowledge from outside the \
 excerpts."""
+
+# Sent after an answer the check rejected. Without the last sentence, the
+# cheapest way to pass would be to drop the value the question asks for.
+REVISION_PROMPT = """\
+The check rejected that answer: {rejection}. Answer the question again from \
+the same excerpts under the same rules. Fix the cause: quote a passage that \
+contains every number your answer states, copied exactly and at least four \
+words long, or leave out a number that the question does not ask for. Do not \
+drop a value the question asks for; if no excerpt states it, set answerable \
+to false."""
 
 # Same output schema as the excerpt prompt, so both arms parse alike.
 MEMORY_PROMPT = """\
@@ -77,6 +87,14 @@ class Unanswerable:
     """The model found no answer in the excerpts."""
 
 
+@dataclass(frozen=True, slots=True)
+class RejectedAttempt:
+    """An answer the check rejected, and why."""
+
+    answer: Answer
+    rejection: Rejected
+
+
 class AnswerError(Exception):
     """The model gave no usable answer: the request failed, was refused or
     truncated, or the reply did not match the schema. Never a refusal on the
@@ -90,13 +108,29 @@ def connect(api_key: str) -> anthropic.Anthropic:
 
 
 def answer_question(
-    client: anthropic.Anthropic, question: str, chunks: Sequence[Chunk]
+    client: anthropic.Anthropic,
+    question: str,
+    chunks: Sequence[Chunk],
+    rejected: Sequence[RejectedAttempt],
 ) -> Answer | Unanswerable:
     """Ask Claude to answer `question` from `chunks` alone.
 
+    `rejected` holds the earlier answers to the same question that the check
+    rejected, oldest first. Each is sent back as Claude's own turn followed
+    by the rejection, so the new answer can address it.
+
     Raises AnswerError if no usable answer comes back.
     """
-    return _request(client, SYSTEM_PROMPT, _prompt(question, chunks))
+    messages: list[MessageParam] = [
+        {"role": "user", "content": _prompt(question, chunks)}
+    ]
+    for attempt in rejected:
+        rejection = f"{attempt.rejection.reason}: {attempt.rejection.detail}"
+        messages.append({"role": "assistant", "content": _serialise(attempt.answer)})
+        messages.append(
+            {"role": "user", "content": REVISION_PROMPT.format(rejection=rejection)}
+        )
+    return _request(client, SYSTEM_PROMPT, messages)
 
 
 def answer_from_memory(
@@ -107,11 +141,13 @@ def answer_from_memory(
 
     Raises AnswerError if no usable answer comes back.
     """
-    return _request(client, MEMORY_PROMPT, f"Question: {question}")
+    return _request(
+        client, MEMORY_PROMPT, [{"role": "user", "content": f"Question: {question}"}]
+    )
 
 
 def _request(
-    client: anthropic.Anthropic, system: str, content: str
+    client: anthropic.Anthropic, system: str, messages: Sequence[MessageParam]
 ) -> Answer | Unanswerable:
     try:
         response = client.messages.create(
@@ -119,7 +155,7 @@ def _request(
             max_tokens=MAX_OUTPUT_TOKENS,
             system=system,
             output_config=OUTPUT_CONFIG,
-            messages=[{"role": "user", "content": content}],
+            messages=messages,
         )
     except anthropic.APIError as error:
         raise AnswerError(f"Claude API request failed: {error}") from error
@@ -138,6 +174,21 @@ def _prompt(question: str, chunks: Sequence[Chunk]) -> str:
         for chunk in chunks
     )
     return f"{excerpts}\n\nQuestion: {question}"
+
+
+def _serialise(answer: Answer) -> str:
+    """The answer as the JSON the model returned it in."""
+    return json.dumps(
+        {
+            "answerable": True,
+            "answer": answer.text,
+            "citations": [
+                {"datasheet": c.datasheet, "page": c.page, "quote": c.quote}
+                for c in answer.citations
+            ],
+        },
+        ensure_ascii=False,
+    )
 
 
 def _parse(text: str) -> Answer | Unanswerable:

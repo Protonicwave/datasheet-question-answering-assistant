@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from datasheet_assistant.answer import AnswerError, Unanswerable
+from datasheet_assistant.answer import AnswerError, RejectedAttempt, Unanswerable
 from datasheet_assistant.evaluate import (
     Arm,
     Outcome,
@@ -49,7 +49,10 @@ class FakeAnswerer:
         return reply
 
     def from_excerpts(
-        self, question: str, chunks: Sequence[Chunk]
+        self,
+        question: str,
+        chunks: Sequence[Chunk],
+        rejected: Sequence[RejectedAttempt],
     ) -> Answer | Unanswerable:
         return self.reply(question)
 

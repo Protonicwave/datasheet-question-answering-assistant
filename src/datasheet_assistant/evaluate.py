@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import assert_never
 
 from datasheet_assistant.answer import AnswerError, Unanswerable
-from datasheet_assistant.pipeline import Answerer, answer_from_excerpts
+from datasheet_assistant.pipeline import TOP_CHUNKS, Answerer, answer_from_excerpts
 from datasheet_assistant.questions import Question
 from datasheet_assistant.retrieve import Index, chunk_pages
 from datasheet_assistant.score import Score, cites_expected_page, score
@@ -98,8 +98,9 @@ def evaluate(
     def run_task(task: tuple[int, Question]) -> list[Record]:
         run, question = task
         memory_reply = _reply(lambda: from_memory(question.text))
+        chunks = index.search(question.text, TOP_CHUNKS)
         excerpt_reply = _reply(
-            lambda: answer_from_excerpts(question.text, index, from_excerpts)
+            lambda: answer_from_excerpts(question.text, chunks, from_excerpts)
         )
         logger.info("run %d: %s done", run, question.id)
         return [
