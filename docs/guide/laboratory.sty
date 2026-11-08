@@ -1,0 +1,103 @@
+% Laboratory house style for documents set with the article or report class:
+% a 175 mm measure at 11pt, sans furniture, Prussian blue as the one accent and
+% an author, date and source strip under the title.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{laboratory}[2026/11/07 Laboratory house style: documents]
+
+\RequirePackage{laboratory-base}
+\RequirePackage[a4paper, textwidth=175mm, textheight=232mm, top=34mm, headheight=14pt, headsep=10mm, hcentering]{geometry}
+\RequirePackage{fancyhdr}
+\RequirePackage{caption}
+\RequirePackage{titlesec}
+\RequirePackage{listings}
+\RequirePackage{amsthm}
+% A float may appear only after the point in the source where it is written,
+% never above it on the same page, so a table written after the paragraph that
+% refers to it cannot open the section before its own.
+\RequirePackage{flafter}
+
+% LaTeX's defaults send any float taller than about half a page to a page of
+% its own; these let a figure and a table share a page with text.
+\setcounter{topnumber}{3}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.5}
+\renewcommand{\textfraction}{0.15}
+\renewcommand{\floatpagefraction}{0.75}
+
+% A third pass of line breaking with extra stretch, so a tight paragraph
+% loosens slightly rather than leaving a line in the margin.
+\setlength{\emergencystretch}{1.5em}
+
+\titleformat{\section}{\normalfont\sffamily\bfseries\Large}{\color{prussian}\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\sffamily\bfseries}{\color{prussian}\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.6\baselineskip plus 0.3\baselineskip minus 0.2\baselineskip}{0.5\baselineskip}
+\titlespacing*{\subsection}{0pt}{1.0\baselineskip plus 0.2\baselineskip}{0.3\baselineskip}
+\@ifundefined{chapter}{}{%
+  \titleformat{\chapter}[hang]{\normalfont\sffamily\bfseries\huge}{\color{prussian}\thechapter}{0.6em}{}
+  \titlespacing*{\chapter}{0pt}{0pt}{2\baselineskip}
+  \addto\captionsbritish{\renewcommand{\bibname}{References}}
+}
+
+\captionsetup{font={small,sf}, labelfont={bf,color=prussian}, labelsep=quad, justification=justified, singlelinecheck=false}
+\captionsetup[table]{position=top, skip=6pt}
+
+\lstset{
+  language = Python,
+  basicstyle = \ttfamily\small,
+  keywordstyle = \color{prussian}\bfseries,
+  commentstyle = \color{rulegrey},
+  backgroundcolor = \color{prussian!5},
+  columns = fullflexible,
+  keepspaces = true,
+  showstringspaces = false,
+  frame = leftline,
+  rulecolor = \color{prussian},
+  framerule = 1.2pt,
+  framesep = 0.8em,
+  xleftmargin = 1.2em,
+  aboveskip = \medskipamount,
+  belowskip = \medskipamount,
+}
+
+% Definitions and worked examples, headed in the furniture face.
+\newtheoremstyle{laboratory}{\medskipamount}{\medskipamount}{\normalfont}{0pt}{\sffamily\bfseries\color{prussian}}{}{0.6em}{}
+\theoremstyle{laboratory}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\sffamily\small\color{rulegrey}\@title}
+\fancyhead[R]{\sffamily\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{{\color{rulegrey}\hrule height \headrulewidth}}
+\fancypagestyle{plain}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}\fancyfoot[R]{\sffamily\small\thepage}}
+
+\renewcommand{\maketitle}{%
+  \thispagestyle{plain}%
+  \begingroup
+  \raggedright
+  {\sffamily\bfseries\fontsize{22}{26}\selectfont \@title\par}
+  \vspace{1.2\baselineskip}
+  \laboratory@recordstrip{\@author}{\@date}
+  \vspace{1.4\baselineskip}
+  \endgroup
+}
+
+\renewenvironment{abstract}{%
+  \small
+  \list{}{\leftmargin=0pt \rightmargin=0pt}%
+  \item\relax{\sffamily\bfseries\color{prussian}Abstract}\enspace\ignorespaces
+}{\endlist\vspace{0.6\baselineskip}}
+
+% hyperref and cleveref come last, as both expect.
+\RequirePackage{hyperref}
+\hypersetup{colorlinks = true, allcolors = prussian, pdfborder = {0 0 0}}
+% Contents entries stay links, but a page of them in the accent would drown it.
+\let\laboratory@tableofcontents\tableofcontents
+\renewcommand{\tableofcontents}{\begingroup\hypersetup{linkcolor=black}\laboratory@tableofcontents\endgroup}
+\RequirePackage[capitalise, noabbrev]{cleveref}
+\crefname{lstlisting}{Listing}{Listings}
+\Crefname{lstlisting}{Listing}{Listings}
+\crefname{definition}{Definition}{Definitions}
+\crefname{example}{Example}{Examples}

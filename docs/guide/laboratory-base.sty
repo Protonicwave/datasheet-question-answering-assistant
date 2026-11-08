@@ -1,0 +1,112 @@
+% Laboratory house style: the type, maths, units, colours and title record
+% strip that documents, slides and posters share. laboratory.sty and
+% beamerthemeLaboratory.sty load it.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{laboratory-base}[2026/11/07 Laboratory house style: type and maths]
+
+\RequirePackage{iftex}
+\RequireLuaTeX
+
+\RequirePackage[british]{babel}
+\RequirePackage{amsmath}
+\RequirePackage{mathtools}
+\RequirePackage{fontspec}
+% Both notices only say that unicode-math replaces a few mathtools commands
+% with its own; neither is a fault in the document.
+\RequirePackage[warnings-off={mathtools-colon,mathtools-overbracket}]{unicode-math}
+\RequirePackage{microtype}
+\RequirePackage{xcolor}
+\RequirePackage{graphicx}
+\RequirePackage{booktabs}
+\RequirePackage{tabularx}
+\RequirePackage{siunitx}
+\RequirePackage{csquotes}
+\RequirePackage[numbers,sort&compress]{natbib}
+
+% Erewhon for text and maths, Source Sans 3 for every piece of furniture,
+% IBM Plex Mono for code. figures/laboratory.mplstyle names the same faces.
+\setmainfont{Erewhon}[
+  Extension = .otf,
+  UprightFont = *-Regular,
+  BoldFont = *-Bold,
+  ItalicFont = *-Italic,
+  BoldItalicFont = *-BoldItalic,
+  Scale = 0.95,
+]
+\setmathfont{Erewhon-Math.otf}[Scale = 0.95]
+\setsansfont{SourceSans3}[
+  Extension = .otf,
+  UprightFont = *-Regular,
+  BoldFont = *-Semibold,
+  ItalicFont = *-RegularIt,
+  BoldItalicFont = *-SemiboldIt,
+  Scale = MatchUppercase,
+]
+\setmonofont{IBMPlexMono}[
+  Extension = .otf,
+  UprightFont = *-Regular,
+  BoldFont = *-SemiBold,
+  ItalicFont = *-Italic,
+  Scale = MatchLowercase,
+]
+
+% Erewhon Math's solidus carries wide side-bearings, so J/k reads as "J / k".
+% Every maths slash is pulled in by 2 mu on each side; text slashes are untouched.
+\AtBeginDocument{%
+  \Umathcharnumdef\laboratoryslash=\Umathcodenum`\/\relax
+  \begingroup\lccode`\~=`\/\lowercase{\endgroup\def~}{\mkern-2mu\laboratoryslash\mkern-2mu}%
+  \mathcode`\/="8000\relax
+}
+
+\definecolor{prussian}{HTML}{1F4A73}
+\definecolor{rulegrey}{gray}{0.6}
+
+% One space after a full stop, so "e.g." and initials need no manual spacing.
+\frenchspacing
+
+% ISO 80000-2 sets the differential upright, with a thin space before it.
+\newcommand{\dd}{\mathop{}\!\mathrm{d}}
+
+% A proper name the British patterns do not break.
+\babelhyphenation[british]{Boltz-mann}
+
+\sisetup{
+  separate-uncertainty = false,
+  group-minimum-digits = 5,
+}
+
+% Table column headings are furniture, so they take the sans face.
+\newcommand{\head}[1]{{\sffamily\bfseries #1}}
+
+% Where the work behind the document lives: a repository, notebook or data
+% folder. The record strip leaves the field out when it is not given.
+\newcommand{\laboratory@source}{}
+\newcommand{\source}[1]{\renewcommand{\laboratory@source}{#1}}
+
+% Sizes of the record strip, which the poster theme scales up for the sheet.
+\newcommand{\laboratory@labelsize}{\footnotesize}
+\newcommand{\laboratory@valuesize}{\small}
+\newlength{\laboratory@accentrule}
+\setlength{\laboratory@accentrule}{1.2pt}
+\newlength{\laboratory@hairline}
+\setlength{\laboratory@hairline}{0.4pt}
+
+% Each line ends its paragraph inside its own size, so it takes its own leading.
+\newcommand{\laboratory@field}[2]{%
+  {\sffamily\laboratory@labelsize\color{prussian}\MakeUppercase{#1}\par}%
+  {\sffamily\laboratory@valuesize #2\par}%
+}
+
+% The house signature under every title: a Prussian rule, the author, date
+% and source, and a grey rule. Takes the author and the date.
+\newcommand{\laboratory@recordstrip}[2]{%
+  {\color{prussian}\hrule height \laboratory@accentrule}%
+  \vspace{0.6\baselineskip}%
+  \noindent
+  \begin{tabularx}{\linewidth}{@{}p{0.22\linewidth}p{0.22\linewidth}X@{}}
+    \laboratory@field{Author}{#1} & \laboratory@field{Date}{#2}
+    & \ifx\laboratory@source\@empty\else\laboratory@field{Source}{\texttt{\laboratory@source}}\fi
+  \end{tabularx}
+  \vspace{0.6\baselineskip}%
+  {\color{rulegrey}\hrule height \laboratory@hairline}%
+}

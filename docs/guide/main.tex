@@ -1,0 +1,45 @@
+\documentclass[11pt]{article}
+\usepackage{laboratory}
+
+\title{Using the datasheet assistant}
+\author{Shlok Bhusal}
+\date{November 2026}
+\source{github.com/Protonicwave/\newline datasheet-question-answering-assistant}
+
+\begin{document}
+
+\maketitle
+
+The assistant answers questions from the BME280, BMP390, BMI270, BMM350, BMA456 and BHI360 datasheets.
+
+\section*{Start it}
+
+On Windows, double-click \texttt{run.bat}. It installs what is missing, asks for an Anthropic API key if \texttt{ANTHROPIC\_API\_KEY} is not set and saves it for your account, downloads the datasheets on first use and opens \texttt{http://127.0.0.1:8000}, reachable from your machine only. Every question is charged to the key. Elsewhere, follow the README.
+
+\section*{Ask well}
+
+Write the part number as one word, as the datasheet does (BMP390, not BMP 390), so the search reads only that datasheet. Ask for one value in the datasheet's own words, such as a register name or VDDIO. Leave out digits you do not need, such as a field's bit range: the answer must find them in a quote.
+
+\section*{Read the outcome}
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.25\linewidth}X@{}}
+  \toprule
+  \head{Outcome} & \head{What it means and what to do} \\
+  \midrule
+  Verified answer & Every number is in a quote found on the cited page, highlighted on the page image. Check its conditions and whether it is a minimum, typical or maximum. \\
+  \addlinespace
+  No verified answer & The drafts failed the check; open the rejected drafts to see why. The datasheet may still state the value: open the outlined page, or ask more narrowly. \\
+  \addlinespace
+  The datasheet does not say & The eight closest passages do not state it; in testing, a quarter of these verdicts were wrong. Search the PDF before relying on it. \\
+  \bottomrule
+\end{tabularx}
+
+\section*{What it cannot read}
+
+Graphs, timing diagrams and drawings; which table column a value sat in; numbers written with a thousands separator; and units the datasheet does not use, so ask in the datasheet's unit.
+
+\section*{How far to trust it}
+
+On 50 test questions run three times, it answered 32.7 of the 40 answerable ones correctly per run (35.7 read by hand), declined 4.0, mostly as \enquote{does not say}, and declined all 10 unanswerable ones. Its one wrong answer in three runs repeats a value the BMA456 datasheet itself contradicts; the model alone gave 4.3 wrong answers per run. The check proves each number is in a passage on the cited page, not that the passage answers your question, and the test questions were checked by Claude, not an engineer. Details: \texttt{docs/report/report.pdf}.
+
+\end{document}

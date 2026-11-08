@@ -1,0 +1,9 @@
+$pdf_mode = 4;  # lualatex
+# latexmk settings for the guide, read when latexmk runs in this folder.
+
+@default_files = ('main.tex');
+$out_dir = 'build';
+
+# SyncTeX lets the editor and the PDF viewer jump to each other; file:line
+# errors let the editor link each error to its source line.
+set_tex_cmds('-synctex=1 -file-line-error %O %S');
