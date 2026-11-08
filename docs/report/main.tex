@@ -1,0 +1,36 @@
+\documentclass[11pt]{article}
+\usepackage{laboratory}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+% A count averaged over three runs, with the lowest and highest run beside it.
+\newcommand{\runs}[3]{\num{#1} & {\footnotesize\color{black!60}(\numrange{#2}{#3})}}
+\newcommand{\steady}[1]{\num{#1} &}
+
+\title{Verified answers from component datasheets}
+\author{Shlok Bhusal}
+\date{November 2026}
+\source{github.com/Protonicwave/\newline datasheet-question-answering-assistant}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+A language model asked about a sensor datasheet can state a wrong value with nothing to show which value is wrong. This assistant answers from passages retrieved from six Bosch Sensortec datasheets and shows an answer only when code confirms that each quoted passage appears word for word on the cited page and that every number in the answer appears in a quote. A rejected answer is sent back to the model once with the reason. On 50 held-out questions, 40 of them answerable, the model alone answered 26.0 correctly per run and gave 4.3 wrong answers. With retrieval it answered 33.3 correctly, with one wrong answer in three runs, and that answer traces to a datasheet that gives two values for one quantity. The check alone withheld 7.3 correct answers per run; with one revision the assistant answered 32.7 correctly with 4.0 answerable questions declined, against 3.3 for unchecked retrieval. The check does not make answers more accurate. It guarantees that every number shown can be found in a passage on the page cited.
+\end{abstract}
+
+\input{sections/introduction}
+\input{sections/system}
+\input{sections/evaluation}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\bibliographystyle{apsrev4-2}
+\bibliography{refs}
+
+\appendix
+\input{sections/reproduction}
+
+\end{document}

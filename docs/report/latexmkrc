@@ -1,0 +1,19 @@
+$pdf_mode = 4;  # lualatex
+# latexmk settings for the report, read when latexmk runs in this folder.
+
+@default_files = ('main.tex');
+$out_dir = 'build';
+
+# SyncTeX lets the editor and the PDF viewer jump to each other; file:line
+# errors let the editor link each error to its source line.
+set_tex_cmds('-synctex=1 -file-line-error %O %S');
+
+# BibTeX runs inside the build folder, so it must be told where refs.bib is.
+# MiKTeX ships no Perl, and the POSIX Perl of Git for Windows names this folder
+# /c/... or /tmp/..., which a native BibTeX cannot open; give it a native path.
+use Cwd;
+my $source_folder = getcwd();
+if ($^O eq 'cygwin' || $^O eq 'msys') {
+    chomp($source_folder = `cygpath -w "$source_folder"`);
+}
+$ENV{'BIBINPUTS'} = $source_folder . $search_path_separator . ($ENV{'BIBINPUTS'} // '');
