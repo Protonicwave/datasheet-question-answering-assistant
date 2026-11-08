@@ -51,6 +51,10 @@ holds the questions whose results were read while building the assistant:
 uv run datasheet-assistant evaluate --questions eval/development.jsonl --runs 3
 ```
 
+`eval/held_out.jsonl` holds 50 further questions on the same datasheets,
+40 answerable and 10 not, written after the assistant was finished and
+run once with the code unchanged. Its results are the ones to quote.
+
 Results go to a new directory under `eval/runs/`: every answer with its
 citations (`answers.jsonl`), the score of each question per arm and run
 (`scores.csv`), and the counts per arm (`summary.csv`, `summary.md`).
