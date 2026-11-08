@@ -112,8 +112,11 @@ listed pages.
 
 The report's source is in `docs/report/`. Building it needs a TeX
 distribution with LuaLaTeX and latexmk (MiKTeX or TeX Live); on Windows,
-run latexmk from Git Bash, since MiKTeX ships no Perl. The results figure
-is drawn from the held-out run with matplotlib:
+run latexmk from Git Bash, since MiKTeX ships no Perl. It also needs the
+Erewhon, Source Sans 3 and IBM Plex Mono fonts and the `apsrev4-2`
+bibliography style from REVTeX, which MiKTeX installs on first use. The
+results figure is drawn from the held-out run with matplotlib, which
+typesets its labels with LuaLaTeX:
 
 ```sh
 uv run --group docs python docs/report/figures/results.py
@@ -123,7 +126,10 @@ cp build/main.pdf report.pdf
 ```
 
 `report.pdf` is committed so the report can be read without TeX; rebuild
-and commit it after changing the source.
+and commit it after changing the source. `laboratory.sty`,
+`laboratory-base.sty` and `figures/laboratory.mplstyle` are unmodified
+copies of a shared house style (version 2026/11/07); replace them whole
+rather than editing them.
 
 ## Test
 

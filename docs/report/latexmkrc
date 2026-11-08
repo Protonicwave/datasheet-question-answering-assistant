@@ -1,7 +1,5 @@
 $pdf_mode = 4;  # lualatex
-# latexmk settings for a document in this folder, read by latexmk run here
-# from a terminal, by VS Code's LaTeX Workshop and by the skill's build.py.
-# The engine line above this comment is written by new_project.py.
+# latexmk settings for the report, read when latexmk runs in this folder.
 
 @default_files = ('main.tex');
 $out_dir = 'build';
