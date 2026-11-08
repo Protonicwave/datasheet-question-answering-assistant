@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from datasheet_assistant.questions import Expected, Question
+from datasheet_assistant.questions import AcceptedAnswer, Expected, Question
 from datasheet_assistant.score import Score, cites_expected_page, score
 from datasheet_assistant.verify import Answer, Citation
 
@@ -10,25 +10,33 @@ ADDRESS = Question(
     "bme280-i2c-address",
     "What is the I2C address of the BME280 with SDO on GND?",
     "bme280",
-    Expected((32,), frozenset({"0x76"}), ()),
+    Expected((32,), (AcceptedAnswer(frozenset({"0x76"}), ()),)),
 )
 RANGE = Question(
     "bme280-pressure-range",
     "What is the operating pressure range of the BME280?",
     "bme280",
-    Expected((2,), frozenset({Decimal(300), Decimal(1100)}), ("hPa",)),
+    Expected(
+        (2,), (AcceptedAnswer(frozenset({Decimal(300), Decimal(1100)}), ("hPa",)),)
+    ),
 )
 ACCURACY = Question(
     "bmp390-absolute-accuracy",
     "What is the typical absolute accuracy of the BMP390?",
     "bmp390",
-    Expected((3,), frozenset({Decimal(50)}), ("Pa",)),
+    Expected(
+        (3,),
+        (
+            AcceptedAnswer(frozenset({Decimal(50)}), ("Pa",)),
+            AcceptedAnswer(frozenset({Decimal("0.5")}), ("hPa",)),
+        ),
+    ),
 )
 INTERFACES = Question(
     "bmm350-interfaces",
     "Which digital interfaces does the BMM350 offer?",
     "bmm350",
-    Expected((2,), frozenset(), ("I2C", "I3C")),
+    Expected((2,), (AcceptedAnswer(frozenset(), ("I2C", "I3C")),)),
 )
 PRICE = Question("bme280-price", "What does the BME280 cost?", "bme280", None)
 
@@ -49,6 +57,10 @@ PRICE = Question("bme280-price", "What does the BME280 cost?", "bme280", None)
         (RANGE, "From 300 to 1250 hPa.", Score.UNPLACED),
         (RANGE, "From 300 to 1100 mbar.", Score.UNPLACED),
         (ACCURACY, "About 50 hPa.", Score.UNPLACED),
+        (ACCURACY, "Typically ±0.5 hPa.", Score.CORRECT),
+        (ACCURACY, "Typically ±50 Pa.", Score.CORRECT),
+        (ACCURACY, "About 0.5 Pa.", Score.UNPLACED),
+        (ACCURACY, "About 8 Pa.", Score.WRONG),
         (INTERFACES, "It offers I2C only.", Score.UNPLACED),
         (ADDRESS, "It depends on the SDO pin.", Score.UNPLACED),
     ],

@@ -5,7 +5,12 @@ from typing import Any
 
 import pytest
 
-from datasheet_assistant.questions import Expected, Question, load_questions
+from datasheet_assistant.questions import (
+    AcceptedAnswer,
+    Expected,
+    Question,
+    load_questions,
+)
 
 PAGES = {
     "bme280": [
@@ -48,7 +53,7 @@ def test_loads_answerable_and_unanswerable_questions(tmp_path: Path) -> None:
             "bme280-i2c-address",
             ANSWERABLE["question"],
             "bme280",
-            Expected((2,), frozenset({"0x76"}), ("slave address",)),
+            Expected((2,), (AcceptedAnswer(frozenset({"0x76"}), ("slave address",)),)),
         ),
         Question("bme280-price", "What does the BME280 cost?", "bme280", None),
     ]
@@ -60,7 +65,22 @@ def test_numbers_compare_by_value(tmp_path: Path) -> None:
     [question] = load_questions(write(tmp_path, entry), PAGES)
 
     assert question.expected is not None
-    assert question.expected.numbers == {Decimal(85)}
+    assert question.expected.accepted[0].numbers == {Decimal(85)}
+
+
+def test_alternatives_follow_the_answer_as_stated(tmp_path: Path) -> None:
+    entry = {
+        **ANSWERABLE,
+        "alternatives": [{"numbers": ["118"], "keywords": ["decimal"]}],
+    }
+
+    [question] = load_questions(write(tmp_path, entry), PAGES)
+
+    assert question.expected is not None
+    assert question.expected.accepted == (
+        AcceptedAnswer(frozenset({"0x76"}), ("slave address",)),
+        AcceptedAnswer(frozenset({Decimal(118)}), ("decimal",)),
+    )
 
 
 def test_skips_blank_lines(tmp_path: Path) -> None:
@@ -89,6 +109,15 @@ def test_skips_blank_lines(tmp_path: Path) -> None:
         ({**ANSWERABLE, "numbers": [], "keywords": []}, "at least one entry"),
         ({**ANSWERABLE, "numbers": ["0x77"]}, "0x77 appear on none of pages"),
         ([ANSWERABLE], "expected an object"),
+        ({**UNANSWERABLE, "alternatives": []}, "expected fields"),
+        ({**ANSWERABLE, "alternatives": {}}, "'alternatives'"),
+        ({**ANSWERABLE, "alternatives": None}, "'alternatives'"),
+        ({**ANSWERABLE, "alternatives": []}, "'alternatives'"),
+        ({**ANSWERABLE, "alternatives": [{"numbers": ["1"]}]}, "alternative fields"),
+        (
+            {**ANSWERABLE, "alternatives": [{"numbers": [], "keywords": []}]},
+            "at least one entry",
+        ),
     ],
 )
 def test_rejects_invalid_entry_naming_the_line(

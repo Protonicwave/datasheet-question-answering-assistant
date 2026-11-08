@@ -62,6 +62,12 @@ that state them; an unanswerable one has only `answerable: false`:
 {"id": "bme280-unit-price", "question": "What is the unit price of the BME280 in quantities of 1,000?", "datasheet": "bme280", "answerable": false}
 ```
 
+An answerable question may add `alternatives`, a list of objects with their
+own `numbers` and `keywords`, for answers that give the same value another
+way, such as `0.5 hPa` for `50 Pa`. An answer is correct if it states every
+value of any one of these sets. Only the first set has to appear on the
+listed pages.
+
 ## Test
 
 ```sh

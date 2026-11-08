@@ -15,7 +15,7 @@ from datasheet_assistant.evaluate import (
     summary_table,
     write_run,
 )
-from datasheet_assistant.questions import Expected, Question
+from datasheet_assistant.questions import AcceptedAnswer, Expected, Question
 from datasheet_assistant.retrieve import Chunk
 from datasheet_assistant.score import Score
 from datasheet_assistant.verify import Answer, Citation
@@ -26,7 +26,7 @@ ADDRESS = Question(
     "bme280-i2c-address",
     "What is the slave address of the BME280 with SDO on GND?",
     "bme280",
-    Expected((2,), frozenset({"0x76"}), ()),
+    Expected((2,), (AcceptedAnswer(frozenset({"0x76"}), ()),)),
 )
 PRICE = Question("bme280-price", "What does the BME280 slave cost?", "bme280", None)
 

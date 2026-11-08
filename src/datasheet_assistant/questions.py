@@ -16,7 +16,18 @@ MAX_QUESTIONS = 1000
 ANSWERABLE_FIELDS = frozenset(
     {"id", "question", "datasheet", "answerable", "pages", "numbers", "keywords"}
 )
+OPTIONAL_ANSWERABLE_FIELDS = frozenset({"alternatives"})
 UNANSWERABLE_FIELDS = frozenset({"id", "question", "datasheet", "answerable"})
+ALTERNATIVE_FIELDS = frozenset({"numbers", "keywords"})
+MAX_ALTERNATIVES = 5
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptedAnswer:
+    """Numbers and keywords that together make a correct answer."""
+
+    numbers: frozenset[Number]
+    keywords: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,8 +36,9 @@ class Expected:
 
     pages: tuple[int, ...]
     """1-based page numbers, any of which holds the answer."""
-    numbers: frozenset[Number]
-    keywords: tuple[str, ...]
+    accepted: tuple[AcceptedAnswer, ...]
+    """The answer as the datasheet states it, then any equivalent forms, such
+    as the same value in another unit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +56,9 @@ def load_questions(path: Path, pages: Mapping[str, Sequence[str]]) -> list[Quest
     Each line is an object with "id", "question", "datasheet" and boolean
     "answerable". An answerable question also has "pages", "numbers" (each a
     string holding one number) and "keywords", with at least one number or
-    keyword, and every number must appear on one of its pages. Raises
+    keyword, and every number must appear on one of its pages. It may add
+    "alternatives": a list of objects with "numbers" and "keywords" giving
+    equivalent answers, which need not appear on the page. Raises
     ValueError naming the line and field of the first problem.
     """
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -75,10 +89,12 @@ def _parse_question(entry: Any, pages: Mapping[str, Sequence[str]]) -> Question:
     answerable = entry.get("answerable")
     if not isinstance(answerable, bool):
         raise ValueError(f"expected boolean 'answerable', got {answerable!r}")
-    allowed = ANSWERABLE_FIELDS if answerable else UNANSWERABLE_FIELDS
-    if entry.keys() != allowed:
+    required = ANSWERABLE_FIELDS if answerable else UNANSWERABLE_FIELDS
+    optional = OPTIONAL_ANSWERABLE_FIELDS if answerable else frozenset()
+    if not required <= entry.keys() <= required | optional:
         raise ValueError(
-            f"expected fields {sorted(allowed)}, got {sorted(entry.keys())}"
+            f"expected fields {sorted(required)}, optionally {sorted(optional)}, "
+            f"got {sorted(entry.keys())}"
         )
     id_ = _string(entry, "id")
     if not ID_PATTERN.fullmatch(id_):
@@ -105,18 +121,48 @@ def _parse_expected(entry: dict[str, Any], datasheet_pages: Sequence[str]) -> Ex
             f"expected 'pages' to list pages from 1 to {len(datasheet_pages)}, "
             f"got {page_numbers!r}"
         )
+    stated = _parse_accepted(entry)
+    on_pages: set[Number] = set()
+    for page in page_numbers:
+        on_pages |= extract_numbers(datasheet_pages[page - 1])
+    missing = stated.numbers - on_pages
+    if missing:
+        listed = ", ".join(sorted(str(number) for number in missing))
+        raise ValueError(f"numbers {listed} appear on none of pages {page_numbers}")
+    alternatives = _parse_alternatives(entry) if "alternatives" in entry else []
+    return Expected(tuple(page_numbers), (stated, *alternatives))
+
+
+def _parse_alternatives(entry: dict[str, Any]) -> list[AcceptedAnswer]:
+    alternatives = entry["alternatives"]
+    if (
+        not isinstance(alternatives, list)
+        or not 1 <= len(alternatives) <= MAX_ALTERNATIVES
+    ):
+        raise ValueError(
+            f"expected 'alternatives' to list 1 to {MAX_ALTERNATIVES} objects, "
+            f"got {alternatives!r}"
+        )
+    parsed = []
+    for alternative in alternatives:
+        if (
+            not isinstance(alternative, dict)
+            or alternative.keys() != ALTERNATIVE_FIELDS
+        ):
+            raise ValueError(
+                f"expected alternative fields {sorted(ALTERNATIVE_FIELDS)}, "
+                f"got {alternative!r}"
+            )
+        parsed.append(_parse_accepted(alternative))
+    return parsed
+
+
+def _parse_accepted(entry: dict[str, Any]) -> AcceptedAnswer:
     numbers = frozenset(_parse_number(text) for text in _strings(entry, "numbers"))
     keywords = tuple(_strings(entry, "keywords"))
     if not numbers and not keywords:
         raise ValueError("expected at least one entry in 'numbers' or 'keywords'")
-    on_pages: set[Number] = set()
-    for page in page_numbers:
-        on_pages |= extract_numbers(datasheet_pages[page - 1])
-    missing = numbers - on_pages
-    if missing:
-        listed = ", ".join(sorted(str(number) for number in missing))
-        raise ValueError(f"numbers {listed} appear on none of pages {page_numbers}")
-    return Expected(tuple(page_numbers), numbers, keywords)
+    return AcceptedAnswer(numbers, keywords)
 
 
 def _parse_number(text: str) -> Number:

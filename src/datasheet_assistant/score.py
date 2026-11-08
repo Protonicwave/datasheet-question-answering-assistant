@@ -22,9 +22,10 @@ def score(question: Question, shown: str | None) -> Score:
     """Score the answer text an arm showed, or None if it said the datasheet
     does not say.
 
-    An answer is correct if it states every expected number and keyword, and
-    wrong if it states numbers but none of the expected ones. Any answer to
-    an unanswerable question is wrong. Anything in between is unplaced.
+    An answer is correct if it states every number and keyword of one accepted
+    answer, and wrong if it states numbers but none from any accepted answer.
+    Any answer to an unanswerable question is wrong. Anything in between is
+    unplaced.
     """
     if shown is None:
         return Score.FALSE_REFUSAL if question.expected else Score.CORRECT_REFUSAL
@@ -36,11 +37,15 @@ def score(question: Question, shown: str | None) -> Score:
 def _score_answer(expected: Expected, shown: str) -> Score:
     stated = extract_numbers(shown)
     text = normalise(shown).lower()
-    if expected.numbers <= stated and all(
-        _has_word(text, keyword) for keyword in expected.keywords
-    ):
-        return Score.CORRECT
-    if expected.numbers and stated and not expected.numbers & stated:
+    for accepted in expected.accepted:
+        if accepted.numbers <= stated and all(
+            _has_word(text, keyword) for keyword in accepted.keywords
+        ):
+            return Score.CORRECT
+    expected_numbers = frozenset().union(
+        *(accepted.numbers for accepted in expected.accepted)
+    )
+    if expected_numbers and stated and not expected_numbers & stated:
         return Score.WRONG
     return Score.UNPLACED
 
