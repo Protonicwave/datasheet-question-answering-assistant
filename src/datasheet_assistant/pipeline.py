@@ -22,10 +22,9 @@ type Answerer = Callable[
 
 @dataclass(frozen=True, slots=True)
 class Checked:
-    verdict: Verified | Rejected | Unanswerable
-    answer: Answer | None
-    """The last answer the model gave; None if it ended unanswerable."""
-    rejected: tuple[RejectedAttempt, ...]
+    final: Verified | RejectedAttempt | Unanswerable
+    """The last answer, verified or withheld, or the model's refusal."""
+    revised: tuple[RejectedAttempt, ...]
     """Earlier answers sent back for revision, oldest first."""
 
 
@@ -43,7 +42,8 @@ def ask(
     reply = answer_from_excerpts(question, chunks, answerer)
     if isinstance(reply, Unanswerable):
         return reply
-    return check_with_retry(question, chunks, reply, pages, answerer).verdict
+    final = check_with_retry(question, chunks, reply, pages, answerer).final
+    return final.rejection if isinstance(final, RejectedAttempt) else final
 
 
 def answer_from_excerpts(
@@ -73,15 +73,18 @@ def check_with_retry(
 
     Raises AnswerError if a revision request gives no usable answer.
     """
-    rejected: list[RejectedAttempt] = []
+    revised: list[RejectedAttempt] = []
     answer = first
     for _ in range(MAX_REVISIONS):
         verdict = verify(answer, pages)
         if isinstance(verdict, Verified):
-            return Checked(verdict, answer, tuple(rejected))
-        rejected.append(RejectedAttempt(answer, verdict))
-        reply = answerer(question, chunks, tuple(rejected))
+            return Checked(verdict, tuple(revised))
+        revised.append(RejectedAttempt(answer, verdict))
+        reply = answerer(question, chunks, tuple(revised))
         if isinstance(reply, Unanswerable):
-            return Checked(reply, None, tuple(rejected))
+            return Checked(reply, tuple(revised))
         answer = reply
-    return Checked(verify(answer, pages), answer, tuple(rejected))
+    verdict = verify(answer, pages)
+    if isinstance(verdict, Rejected):
+        return Checked(RejectedAttempt(answer, verdict), tuple(revised))
+    return Checked(verdict, tuple(revised))

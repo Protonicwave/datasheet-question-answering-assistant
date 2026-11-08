@@ -1,27 +1,36 @@
-"""Runs the three evaluation arms over the question set and writes the results.
+"""Runs the four evaluation arms over a question set and writes the results.
 
 A: the model alone, answering from memory. B: the model answering from
-retrieved excerpts. C: B's answers passed through the check. C makes no model
-call of its own, so the check is the only difference between B and C.
+retrieved excerpts. C: B's answers passed through the check. D: B's answers
+passed through the check, with each rejected answer sent back for revision.
+C makes no model call of its own and D starts from B's answer, so the check
+is the only difference between B and C, and the retry between C and D.
 """
 
 import csv
+import functools
 import json
 import logging
 import statistics
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import assert_never
 
-from datasheet_assistant.answer import AnswerError, Unanswerable
-from datasheet_assistant.pipeline import TOP_CHUNKS, Answerer, answer_from_excerpts
+from datasheet_assistant.answer import AnswerError, RejectedAttempt, Unanswerable
+from datasheet_assistant.pipeline import (
+    TOP_CHUNKS,
+    Answerer,
+    Checked,
+    answer_from_excerpts,
+    check_with_retry,
+)
 from datasheet_assistant.questions import Question
 from datasheet_assistant.retrieve import Index, chunk_pages
 from datasheet_assistant.score import Score, cites_expected_page, score
-from datasheet_assistant.verify import Answer, Rejected, verify
+from datasheet_assistant.verify import Answer, Rejected, Verified, verify
 
 # Each worker makes one request at a time; the SDK retries rate limits.
 MAX_CONCURRENT_REQUESTS = 4
@@ -40,12 +49,14 @@ class Arm(StrEnum):
     MODEL_ALONE = "model_alone"
     MODEL_WITH_SEARCH = "model_with_search"
     SEARCH_WITH_CHECK = "search_with_check"
+    SEARCH_CHECK_RETRY = "search_check_retry"
 
 
 ARM_LABELS = {
     Arm.MODEL_ALONE: "A: model alone",
     Arm.MODEL_WITH_SEARCH: "B: model with search",
     Arm.SEARCH_WITH_CHECK: "C: search with check",
+    Arm.SEARCH_CHECK_RETRY: "D: search, check and retry",
 }
 
 
@@ -71,6 +82,8 @@ class Record:
     score: Score | None
     """None when the request failed."""
     cites_expected_page: bool | None
+    revised: tuple[RejectedAttempt, ...] = ()
+    """Answers sent back for revision before the recorded one; arm D only."""
 
     @property
     def category(self) -> str:
@@ -84,7 +97,7 @@ def evaluate(
     from_excerpts: Answerer,
     runs: int,
 ) -> list[Record]:
-    """Run every question through all three arms `runs` times, searching and
+    """Run every question through all four arms `runs` times, searching and
     checking against `pages`.
 
     A failed request is recorded as an error, never as a refusal. Records
@@ -102,12 +115,17 @@ def evaluate(
         excerpt_reply = _reply(
             lambda: answer_from_excerpts(question.text, chunks, from_excerpts)
         )
-        logger.info("run %d: %s done", run, question.id)
-        return [
+        retry = functools.partial(
+            check_with_retry, question.text, chunks, pages=pages, answerer=from_excerpts
+        )
+        records = [
             _record(run, question, Arm.MODEL_ALONE, memory_reply),
             _record(run, question, Arm.MODEL_WITH_SEARCH, excerpt_reply),
             _checked_record(run, question, excerpt_reply, pages),
+            _retried_record(run, question, excerpt_reply, retry),
         ]
+        logger.info("run %d: %s done", run, question.id)
+        return records
 
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as pool:
         return [record for records in pool.map(run_task, tasks) for record in records]
@@ -155,20 +173,51 @@ def _record(run: int, question: Question, arm: Arm, reply: Reply) -> Record:
 def _checked_record(
     run: int, question: Question, reply: Reply, pages: Mapping[str, Sequence[str]]
 ) -> Record:
-    if isinstance(reply, Answer):
-        verdict = verify(reply, pages)
-        if isinstance(verdict, Rejected):
-            return Record(
-                run,
-                question,
-                Arm.SEARCH_WITH_CHECK,
-                Outcome.WITHHELD,
-                reply,
-                f"{verdict.reason}: {verdict.detail}",
-                score(question, None),
-                cites_expected_page(question, reply),
-            )
-    return _record(run, question, Arm.SEARCH_WITH_CHECK, reply)
+    arm = Arm.SEARCH_WITH_CHECK
+    if not isinstance(reply, Answer):
+        return _record(run, question, arm, reply)
+    verdict = verify(reply, pages)
+    if isinstance(verdict, Rejected):
+        return _withheld_record(run, question, arm, RejectedAttempt(reply, verdict))
+    return _record(run, question, arm, reply)
+
+
+def _retried_record(
+    run: int, question: Question, reply: Reply, retry: Callable[[Answer], Checked]
+) -> Record:
+    arm = Arm.SEARCH_CHECK_RETRY
+    if not isinstance(reply, Answer):
+        return _record(run, question, arm, reply)
+    try:
+        checked = retry(reply)
+    except AnswerError as error:
+        return _record(run, question, arm, error)
+    match checked.final:
+        case Verified():
+            record = _record(run, question, arm, checked.final.answer)
+        case RejectedAttempt():
+            record = _withheld_record(run, question, arm, checked.final)
+        case Unanswerable():
+            record = _record(run, question, arm, checked.final)
+        case _:
+            assert_never(checked.final)
+    return replace(record, revised=checked.revised)
+
+
+def _withheld_record(
+    run: int, question: Question, arm: Arm, attempt: RejectedAttempt
+) -> Record:
+    rejection = attempt.rejection
+    return Record(
+        run,
+        question,
+        arm,
+        Outcome.WITHHELD,
+        attempt.answer,
+        f"{rejection.reason}: {rejection.detail}",
+        score(question, None),
+        cites_expected_page(question, attempt.answer),
+    )
 
 
 def summarise(records: Sequence[Record]) -> dict[Arm, dict[str, list[int]]]:
@@ -249,11 +298,21 @@ def _answer_row(record: Record) -> dict[str, object]:
         "score": record.category,
         "cites_expected_page": record.cites_expected_page,
         "answer": None if answer is None else answer.text,
-        "citations": []
-        if answer is None
-        else [
-            {"datasheet": c.datasheet, "page": c.page, "quote": c.quote}
-            for c in answer.citations
-        ],
+        "citations": [] if answer is None else _citation_rows(answer),
         "detail": record.detail,
+        "revisions": [
+            {
+                "answer": attempt.answer.text,
+                "citations": _citation_rows(attempt.answer),
+                "rejection": f"{attempt.rejection.reason}: {attempt.rejection.detail}",
+            }
+            for attempt in record.revised
+        ],
     }
+
+
+def _citation_rows(answer: Answer) -> list[dict[str, object]]:
+    return [
+        {"datasheet": c.datasheet, "page": c.page, "quote": c.quote}
+        for c in answer.citations
+    ]

@@ -15,6 +15,7 @@ from datasheet_assistant.evaluate import (
     summary_table,
     write_run,
 )
+from datasheet_assistant.pipeline import MAX_REVISIONS
 from datasheet_assistant.questions import AcceptedAnswer, Expected, Question
 from datasheet_assistant.retrieve import Chunk
 from datasheet_assistant.score import Score
@@ -34,16 +35,27 @@ VERIFIABLE = Answer("The address is 0x76.", (Citation("bme280", 2, QUOTE),))
 UNVERIFIABLE = Answer("The 7-bit address is 0x76.", (Citation("bme280", 2, QUOTE),))
 
 
-class FakeAnswerer:
-    """Replies by question text, and records every question it is asked."""
+type Reply = Answer | Unanswerable | AnswerError
 
-    def __init__(self, replies: dict[str, Answer | Unanswerable | AnswerError]) -> None:
+
+class FakeAnswerer:
+    """Replies by question text, with `revised` replies to revision requests,
+    and records every question it is asked and every rejection it is sent."""
+
+    def __init__(
+        self, replies: dict[str, Reply], revised: dict[str, Reply] | None = None
+    ) -> None:
         self.replies = replies
+        self.revised = revised or {}
         self.asked: list[str] = []
+        self.histories: list[tuple[RejectedAttempt, ...]] = []
 
     def reply(self, question: str) -> Answer | Unanswerable:
+        return self._give(question, self.replies)
+
+    def _give(self, question: str, replies: dict[str, Reply]) -> Answer | Unanswerable:
         self.asked.append(question)
-        reply = self.replies[question]
+        reply = replies[question]
         if isinstance(reply, AnswerError):
             raise reply
         return reply
@@ -54,7 +66,10 @@ class FakeAnswerer:
         chunks: Sequence[Chunk],
         rejected: Sequence[RejectedAttempt],
     ) -> Answer | Unanswerable:
-        return self.reply(question)
+        if not rejected:
+            return self.reply(question)
+        self.histories.append(tuple(rejected))
+        return self._give(question, self.revised)
 
 
 def by_arm(
@@ -73,11 +88,16 @@ def run(memory: FakeAnswerer, excerpts: FakeAnswerer, runs: int = 1) -> list[Rec
 
 def test_check_arm_derives_from_search_arm_without_a_model_call() -> None:
     memory = FakeAnswerer({ADDRESS.text: VERIFIABLE, PRICE.text: Unanswerable()})
-    excerpts = FakeAnswerer({ADDRESS.text: UNVERIFIABLE, PRICE.text: Unanswerable()})
+    excerpts = FakeAnswerer(
+        {ADDRESS.text: UNVERIFIABLE, PRICE.text: Unanswerable()},
+        revised={ADDRESS.text: Unanswerable()},
+    )
 
     records = run(memory, excerpts, runs=2)
 
-    assert sorted(excerpts.asked) == sorted([ADDRESS.text, PRICE.text] * 2)
+    assert excerpts.asked.count(PRICE.text) == 2
+    # One first answer per run for B, plus one revision per run for D.
+    assert excerpts.asked.count(ADDRESS.text) == 2 * 2
     arms = by_arm(records, ADDRESS, run=2)
     assert arms[Arm.MODEL_WITH_SEARCH].outcome == Outcome.ANSWERED
     assert arms[Arm.MODEL_WITH_SEARCH].score == Score.CORRECT
@@ -181,7 +201,10 @@ def test_summary_counts_each_category_per_run_and_shows_spread() -> None:
 
 
 def test_writes_run_files_and_refuses_to_overwrite(tmp_path: Path) -> None:
-    memory = FakeAnswerer({ADDRESS.text: UNVERIFIABLE, PRICE.text: Unanswerable()})
+    memory = FakeAnswerer(
+        {ADDRESS.text: UNVERIFIABLE, PRICE.text: Unanswerable()},
+        revised={ADDRESS.text: UNVERIFIABLE},
+    )
     records = run(memory, memory)
     directory = tmp_path / "run"
 
@@ -194,17 +217,88 @@ def test_writes_run_files_and_refuses_to_overwrite(tmp_path: Path) -> None:
         .splitlines()
     ]
     withheld = answers[2]
+    retried = answers[3]
     assert withheld["arm"] == "search_with_check"
     assert withheld["outcome"] == "withheld"
     assert withheld["citations"][0]["page"] == 2
+    assert retried["arm"] == "search_check_retry"
+    assert retried["revisions"][0]["answer"] == UNVERIFIABLE.text
+    assert retried["revisions"][0]["rejection"].startswith("number_not_in_quotes")
     with (directory / "scores.csv").open(encoding="utf-8", newline="") as file:
         scores = list(csv.DictReader(file))
-    assert len(scores) == 6
+    assert len(scores) == 8
     assert scores[0]["cites_expected_page"] == "True"
-    assert scores[3]["cites_expected_page"] == ""
+    assert scores[4]["cites_expected_page"] == ""
     summary = (directory / "summary.md").read_text(encoding="utf-8")
     assert "2 questions, 1 run." in summary
     assert "| C: search with check |" in summary
+    assert "| D: search, check and retry |" in summary
     assert (directory / "summary.csv").exists()
     with pytest.raises(FileExistsError):
         write_run(records, "again", directory)
+
+
+def test_retry_arm_shows_a_revision_that_passes_the_check() -> None:
+    memory = FakeAnswerer({ADDRESS.text: Unanswerable(), PRICE.text: Unanswerable()})
+    excerpts = FakeAnswerer(
+        {ADDRESS.text: UNVERIFIABLE, PRICE.text: Unanswerable()},
+        revised={ADDRESS.text: VERIFIABLE},
+    )
+
+    arms = by_arm(run(memory, excerpts), ADDRESS)
+
+    assert arms[Arm.SEARCH_WITH_CHECK].outcome == Outcome.WITHHELD
+    retried = arms[Arm.SEARCH_CHECK_RETRY]
+    assert retried.outcome == Outcome.ANSWERED
+    assert retried.answer == VERIFIABLE
+    assert retried.score == Score.CORRECT
+    [attempt] = retried.revised
+    assert attempt.answer == UNVERIFIABLE
+    assert excerpts.histories == [(attempt,)]
+
+
+def test_retry_arm_copies_the_check_arm_when_nothing_is_rejected() -> None:
+    memory = FakeAnswerer({ADDRESS.text: Unanswerable(), PRICE.text: Unanswerable()})
+    excerpts = FakeAnswerer({ADDRESS.text: VERIFIABLE, PRICE.text: Unanswerable()})
+
+    records = run(memory, excerpts)
+
+    assert excerpts.histories == []
+    for question in (ADDRESS, PRICE):
+        arms = by_arm(records, question)
+        checked, retried = arms[Arm.SEARCH_WITH_CHECK], arms[Arm.SEARCH_CHECK_RETRY]
+        assert (retried.outcome, retried.answer, retried.score) == (
+            checked.outcome,
+            checked.answer,
+            checked.score,
+        )
+        assert retried.revised == ()
+
+
+def test_retry_arm_withholds_after_the_last_revision_fails() -> None:
+    memory = FakeAnswerer({ADDRESS.text: Unanswerable(), PRICE.text: Unanswerable()})
+    excerpts = FakeAnswerer(
+        {ADDRESS.text: UNVERIFIABLE, PRICE.text: Unanswerable()},
+        revised={ADDRESS.text: UNVERIFIABLE},
+    )
+
+    retried = by_arm(run(memory, excerpts), ADDRESS)[Arm.SEARCH_CHECK_RETRY]
+
+    assert retried.outcome == Outcome.WITHHELD
+    assert retried.score == Score.FALSE_REFUSAL
+    assert len(retried.revised) == MAX_REVISIONS
+    assert retried.detail.startswith("number_not_in_quotes")
+
+
+def test_failed_revision_is_an_error_for_the_retry_arm_only() -> None:
+    memory = FakeAnswerer({ADDRESS.text: Unanswerable(), PRICE.text: Unanswerable()})
+    excerpts = FakeAnswerer(
+        {ADDRESS.text: UNVERIFIABLE, PRICE.text: Unanswerable()},
+        revised={ADDRESS.text: AnswerError("Claude API request failed: down")},
+    )
+
+    arms = by_arm(run(memory, excerpts), ADDRESS)
+
+    assert arms[Arm.SEARCH_WITH_CHECK].outcome == Outcome.WITHHELD
+    assert arms[Arm.SEARCH_CHECK_RETRY].outcome == Outcome.ERROR
+    assert "request failed" in arms[Arm.SEARCH_CHECK_RETRY].detail

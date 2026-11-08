@@ -20,7 +20,7 @@ from datasheet_assistant.answer import (
 )
 from datasheet_assistant.evaluate import evaluate, summarise, summary_table, write_run
 from datasheet_assistant.ingest import ingest, load_pages, load_sources
-from datasheet_assistant.pipeline import ask
+from datasheet_assistant.pipeline import MAX_REVISIONS, ask
 from datasheet_assistant.questions import load_questions
 from datasheet_assistant.retrieve import Index, chunk_pages
 from datasheet_assistant.verify import Rejected, Verified
@@ -47,8 +47,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ask_parser.add_argument("question")
     evaluate_parser = commands.add_parser(
         "evaluate",
-        help="run the question set through the model alone, the model with "
-        "search, and search with the check",
+        help="run a question set through the model alone, the model with "
+        "search, search with the check, and search with the check and retry",
     )
     evaluate_parser.add_argument(
         "--questions",
@@ -105,7 +105,8 @@ def _evaluate(questions_path: Path, runs: int) -> str:
     heading = (
         f"{questions_path.as_posix()}: {len(questions)} questions "
         f"({answerable} answerable), "
-        f"{runs} runs, model {MODEL}."
+        f"{runs} runs, model {MODEL}, "
+        f"up to {MAX_REVISIONS} revisions per rejected answer."
     )
     write_run(records, heading, directory)
     return f"wrote {directory}\n\n{summary_table(summarise(records))}"

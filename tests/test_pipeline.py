@@ -3,7 +3,12 @@ from collections.abc import Sequence
 import pytest
 
 from datasheet_assistant.answer import AnswerError, RejectedAttempt, Unanswerable
-from datasheet_assistant.pipeline import MAX_REVISIONS, ask, check_with_retry
+from datasheet_assistant.pipeline import (
+    MAX_REVISIONS,
+    Checked,
+    ask,
+    check_with_retry,
+)
 from datasheet_assistant.retrieve import Chunk, Index, chunk_pages
 from datasheet_assistant.verify import (
     Answer,
@@ -101,9 +106,7 @@ def test_verified_first_answer_needs_no_revision() -> None:
 
     checked = check_with_retry(QUESTION, (), VERIFIABLE, PAGES, answerer)
 
-    assert checked.verdict == Verified(VERIFIABLE)
-    assert checked.answer == VERIFIABLE
-    assert checked.rejected == ()
+    assert checked == Checked(Verified(VERIFIABLE), ())
     assert answerer.histories == []
 
 
@@ -113,8 +116,8 @@ def test_rejected_answer_is_sent_back_with_the_rejection() -> None:
 
     checked = check_with_retry(QUESTION, chunks, UNVERIFIABLE, PAGES, answerer)
 
-    assert checked.verdict == Verified(VERIFIABLE)
-    [attempt] = checked.rejected
+    assert checked.final == Verified(VERIFIABLE)
+    [attempt] = checked.revised
     assert attempt.answer == UNVERIFIABLE
     assert attempt.rejection.reason == RejectionReason.NUMBER_NOT_IN_QUOTES
     assert answerer.histories == [(attempt,)]
@@ -126,9 +129,9 @@ def test_revisions_stop_at_the_bound_with_every_attempt_kept() -> None:
 
     checked = check_with_retry(QUESTION, (), UNVERIFIABLE, PAGES, answerer)
 
-    assert isinstance(checked.verdict, Rejected)
-    assert checked.answer == UNVERIFIABLE
-    assert len(checked.rejected) == MAX_REVISIONS
+    assert isinstance(checked.final, RejectedAttempt)
+    assert checked.final.answer == UNVERIFIABLE
+    assert len(checked.revised) == MAX_REVISIONS
     assert [len(history) for history in answerer.histories] == list(
         range(1, MAX_REVISIONS + 1)
     )
@@ -139,9 +142,8 @@ def test_revision_marked_unanswerable_is_a_refusal() -> None:
         QUESTION, (), UNVERIFIABLE, PAGES, FakeAnswerer(Unanswerable())
     )
 
-    assert checked.verdict == Unanswerable()
-    assert checked.answer is None
-    assert len(checked.rejected) == 1
+    assert checked.final == Unanswerable()
+    assert len(checked.revised) == 1
 
 
 def test_failed_revision_request_raises() -> None:
