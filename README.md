@@ -4,7 +4,7 @@ Answers questions about Bosch Sensortec sensor datasheets. Every answer cites
 the datasheet page and passage it came from, and is shown only when code has
 verified it: the quote must appear on the cited page and every number in the
 answer must appear in the quote. An answer that fails is sent back to the
-model with the reason, at most twice; if no revision passes, the assistant
+model with the reason, once; if the revision does not pass, the assistant
 says the datasheet does not say.
 
 ## Install
@@ -35,15 +35,15 @@ uv run datasheet-assistant ask "What is the maximum interface supply voltage VDD
 
 The answer is printed with the datasheet, page and passage each citation
 quotes. If the datasheets do not answer the question, or the answer and its
-revisions all fail the check, it prints "The datasheet does not say." with the reason an answer
-was withheld.
+revision both fail the check, it prints "The datasheet does not say." with
+the reason an answer was withheld.
 
 ## Evaluate
 
 Run a question set through four arms: the model alone (A), the model
 answering from retrieved excerpts (B), B's answers passed through the check
 (C), and B's answers passed through the check with each rejected answer
-sent back to the model, with the reason, for up to two revisions (D). Each
+sent back to the model, with the reason, for one revision (D). Each
 arm runs three times by default. `eval/development.jsonl`
 holds the questions whose results were read while building the assistant:
 

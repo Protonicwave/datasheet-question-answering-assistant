@@ -106,7 +106,7 @@ def _evaluate(questions_path: Path, runs: int) -> str:
         f"{questions_path.as_posix()}: {len(questions)} questions "
         f"({answerable} answerable), "
         f"{runs} runs, model {MODEL}, "
-        f"up to {MAX_REVISIONS} revisions per rejected answer."
+        f"revisions per rejected answer: at most {MAX_REVISIONS}."
     )
     write_run(records, heading, directory)
     return f"wrote {directory}\n\n{summary_table(summarise(records))}"

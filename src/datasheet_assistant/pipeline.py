@@ -12,8 +12,10 @@ from datasheet_assistant.verify import Answer, Rejected, Verified, verify
 TOP_CHUNKS = 8
 
 # Each revision is one more request on a question already answered once, so
-# a rejected answer costs at most 1 + MAX_REVISIONS requests.
-MAX_REVISIONS = 2
+# a rejected answer costs at most 1 + MAX_REVISIONS requests. On the
+# development set every rejected answer that could pass did so on its first
+# revision, so a second one would only add requests.
+MAX_REVISIONS = 1
 
 type Answerer = Callable[
     [str, Sequence[Chunk], Sequence[RejectedAttempt]], Answer | Unanswerable
