@@ -50,3 +50,43 @@ def normalise(text: str) -> str:
     text = PRIVATE_USE.sub(" ", text)
     text = HYPHEN_BETWEEN_LETTERS.sub("", text)
     return WHITESPACE.sub(" ", text).strip()
+
+
+def normalise_with_origins(text: str) -> tuple[str, list[int]]:
+    """Return the matching form of `text` and, for each of its characters,
+    the index in `text` it came from.
+
+    Applies the steps of `normalise` one character at a time, so a span
+    found in the matching form can be traced back to the original text.
+    Agrees with `normalise` except where NFKC would combine characters
+    across a boundary, such as a letter and a separate combining accent.
+    """
+    characters: list[str] = []
+    origins: list[int] = []
+    for index, character in enumerate(text):
+        mapped = unicodedata.normalize("NFKC", character.translate(CHARACTER_MAP))
+        for produced in PRIVATE_USE.sub(" ", mapped):
+            characters.append(produced)
+            origins.append(index)
+    joined = "".join(characters)
+    dropped = {
+        position
+        for match in HYPHEN_BETWEEN_LETTERS.finditer(joined)
+        for position in range(match.start(), match.end())
+    }
+
+    result: list[str] = []
+    result_origins: list[int] = []
+    for position, character in enumerate(joined):
+        if position in dropped:
+            continue
+        if character.isspace():
+            if not result or result[-1] == " ":
+                continue
+            character = " "
+        result.append(character)
+        result_origins.append(origins[position])
+    if result and result[-1] == " ":
+        result.pop()
+        result_origins.pop()
+    return "".join(result), result_origins

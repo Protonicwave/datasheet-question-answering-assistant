@@ -4,8 +4,8 @@ Answers questions about Bosch Sensortec sensor datasheets. Every answer cites
 the datasheet page and passage it came from, and is shown only when code has
 verified it: the quote must appear on the cited page and every number in the
 answer must appear in the quote. An answer that fails is sent back to the
-model with the reason, once; if the revision does not pass, the assistant
-says the datasheet does not say.
+model with the reason, once; if the revision does not pass, no answer is
+shown.
 
 ## Install
 
@@ -34,9 +34,10 @@ uv run datasheet-assistant ask "What is the maximum interface supply voltage VDD
 ```
 
 The answer is printed with the datasheet, page and passage each citation
-quotes. If the datasheets do not answer the question, or the answer and its
-revision both fail the check, it prints "The datasheet does not say." with
-the reason an answer was withheld.
+quotes. If the datasheets do not answer the question, it prints "The
+datasheet does not say." If the answer and its revision both fail the
+check, it prints "No verified answer." with the reason the answer was
+withheld: the datasheet may still state it.
 
 ## Evaluate
 

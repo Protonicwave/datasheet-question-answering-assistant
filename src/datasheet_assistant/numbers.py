@@ -1,6 +1,7 @@
 """Extracts the numbers a piece of text states, for comparison by value."""
 
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 
 from datasheet_assistant.normalise import normalise
@@ -26,6 +27,31 @@ NUMBER = re.compile(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class NumberSpan:
+    start: int
+    end: int
+    value: Number
+
+
+def number_spans(text: str) -> list[NumberSpan]:
+    """Return each number in `text` as given, with its position, in order.
+
+    `text` is not normalised, so positions index into it directly. Values
+    follow the rules of `extract_numbers`.
+    """
+    spans = []
+    for match in NUMBER.finditer(text):
+        hex_literal = match.group("hex")
+        value: Number = (
+            hex_literal.lower()
+            if hex_literal is not None
+            else Decimal(match.group("decimal"))
+        )
+        spans.append(NumberSpan(match.start(), match.end(), value))
+    return spans
+
+
 def extract_numbers(text: str) -> set[Number]:
     """Return the numbers in `text`, after normalisation.
 
@@ -33,11 +59,4 @@ def extract_numbers(text: str) -> set[Number]:
     40). A leading "+" or "±" is not part of the value. Hex literals compare
     as case-insensitive strings and never equal a decimal.
     """
-    numbers: set[Number] = set()
-    for match in NUMBER.finditer(normalise(text)):
-        hex_literal = match.group("hex")
-        if hex_literal is not None:
-            numbers.add(hex_literal.lower())
-        else:
-            numbers.add(Decimal(match.group("decimal")))
-    return numbers
+    return {span.value for span in number_spans(normalise(text))}

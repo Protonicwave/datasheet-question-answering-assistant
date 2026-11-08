@@ -10,9 +10,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import assert_never
 
+import uvicorn
+
 from datasheet_assistant.answer import (
     MODEL,
     AnswerError,
+    RejectedAttempt,
     Unanswerable,
     answer_from_memory,
     answer_question,
@@ -20,10 +23,12 @@ from datasheet_assistant.answer import (
 )
 from datasheet_assistant.evaluate import evaluate, summarise, summary_table, write_run
 from datasheet_assistant.ingest import ingest, load_pages, load_sources
+from datasheet_assistant.pdf_pages import PdfPages
 from datasheet_assistant.pipeline import MAX_REVISIONS, ask
 from datasheet_assistant.questions import load_questions
 from datasheet_assistant.retrieve import Index, chunk_pages
-from datasheet_assistant.verify import Rejected, Verified
+from datasheet_assistant.server import create_app
+from datasheet_assistant.verify import Verified
 
 SOURCES_PATH = Path("datasheets/sources.toml")
 PDF_DIR = Path("data/pdfs")
@@ -31,8 +36,16 @@ PAGES_DIR = Path("data/pages")
 RUNS_DIR = Path("eval/runs")
 DEFAULT_RUNS = 3
 API_KEY_VARIABLE = "ANTHROPIC_API_KEY"
+WEB_DIR = Path("web/dist")
+# Loopback only: the server spends the API key of whoever runs it and has
+# no accounts, so it is not for a shared network.
+SERVE_HOST = "127.0.0.1"
+DEFAULT_PORT = 8000
 
 NOT_IN_DATASHEET = "The datasheet does not say."
+# An answer that failed the check may still be true, so a withheld answer
+# must not be reported as the datasheet being silent.
+NO_VERIFIED_ANSWER = "No verified answer."
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -57,6 +70,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="question file, such as eval/development.jsonl",
     )
     evaluate_parser.add_argument("--runs", type=int, default=DEFAULT_RUNS)
+    serve_parser = commands.add_parser(
+        "serve", help="serve the web page and its API on this machine"
+    )
+    serve_parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     arguments = parser.parse_args(argv)
 
     try:
@@ -64,6 +81,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = _ingest()
         elif arguments.command == "ask":
             output = _ask(arguments.question)
+        elif arguments.command == "serve":
+            output = _serve(arguments.port)
         else:
             output = _evaluate(arguments.questions, arguments.runs)
     except (ValueError, OSError, AnswerError) as error:
@@ -85,7 +104,30 @@ def _ask(question: str) -> str:
     client = connect(_api_key())
     pages = load_pages(PAGES_DIR)
     answerer = functools.partial(answer_question, client)
-    return render(ask(question, Index(chunk_pages(pages)), pages, answerer))
+    return render(ask(question, Index(chunk_pages(pages)), pages, answerer).final)
+
+
+def _serve(port: int) -> str:
+    client = connect(_api_key())
+    pages = load_pages(PAGES_DIR)
+    missing = [name for name in pages if not (PDF_DIR / f"{name}.pdf").is_file()]
+    if missing:
+        raise ValueError(
+            f"{PDF_DIR}: no PDF for {', '.join(missing)}; run the ingest command"
+        )
+    web_dir = WEB_DIR if WEB_DIR.is_dir() else None
+    if web_dir is None:
+        print(f"{WEB_DIR} not found: serving the API only", file=sys.stderr)
+    app = create_app(
+        Index(chunk_pages(pages)),
+        pages,
+        functools.partial(answer_question, client),
+        PdfPages(PDF_DIR),
+        web_dir,
+    )
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    uvicorn.run(app, host=SERVE_HOST, port=port)
+    return "server stopped"
 
 
 def _evaluate(questions_path: Path, runs: int) -> str:
@@ -119,7 +161,7 @@ def _api_key() -> str:
     return api_key
 
 
-def render(outcome: Verified | Rejected | Unanswerable) -> str:
+def render(outcome: Verified | RejectedAttempt | Unanswerable) -> str:
     """Format an outcome for the terminal. Only a verified answer is shown."""
     match outcome:
         case Verified(answer):
@@ -128,8 +170,11 @@ def render(outcome: Verified | Rejected | Unanswerable) -> str:
                 for citation in answer.citations
             )
             return f"{answer.text}\n\n{sources}"
-        case Rejected(_, detail):
-            return f"{NOT_IN_DATASHEET}\n(An answer was withheld: {detail}.)"
+        case RejectedAttempt():
+            return (
+                f"{NO_VERIFIED_ANSWER}\n"
+                f"(An answer was withheld: {outcome.rejection.detail}.)"
+            )
         case Unanswerable():
             return NOT_IN_DATASHEET
         case _:

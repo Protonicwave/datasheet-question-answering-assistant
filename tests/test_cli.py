@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from datasheet_assistant.answer import Unanswerable
-from datasheet_assistant.cli import NOT_IN_DATASHEET, main, render
+from datasheet_assistant.answer import RejectedAttempt, Unanswerable
+from datasheet_assistant.cli import NO_VERIFIED_ANSWER, NOT_IN_DATASHEET, main, render
 from datasheet_assistant.verify import (
     Answer,
     Citation,
@@ -25,14 +25,19 @@ def test_renders_verified_answer_with_each_citation() -> None:
     )
 
 
-def test_renders_rejection_as_not_in_datasheet_with_reason() -> None:
-    rejected = Rejected(
-        RejectionReason.NUMBER_NOT_IN_QUOTES, "answer states 7, which no quote contains"
+def test_renders_rejection_as_no_verified_answer_with_reason() -> None:
+    rejected = RejectedAttempt(
+        Answer("The address is 0x77.", ()),
+        Rejected(
+            RejectionReason.NUMBER_NOT_IN_QUOTES,
+            "answer states 7, which no quote contains",
+        ),
     )
 
     output = render(rejected)
 
-    assert output.startswith(NOT_IN_DATASHEET)
+    assert output.startswith(NO_VERIFIED_ANSWER)
+    assert "0x77" not in output
     assert "answer states 7" in output
 
 

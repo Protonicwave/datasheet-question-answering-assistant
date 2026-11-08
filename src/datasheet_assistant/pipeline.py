@@ -35,17 +35,17 @@ def ask(
     index: Index,
     pages: Mapping[str, Sequence[str]],
     answerer: Answerer,
-) -> Verified | Rejected | Unanswerable:
-    """Answer `question` from the datasheets, showing only verified answers.
+) -> Checked:
+    """Answer `question` from the datasheets, keeping every rejected draft.
 
-    Raises AnswerError if the answerer gives no usable answer.
+    Only a final Verified answer may be shown as an answer. Raises
+    AnswerError if the answerer gives no usable answer.
     """
     chunks = index.search(question, TOP_CHUNKS)
     reply = answer_from_excerpts(question, chunks, answerer)
     if isinstance(reply, Unanswerable):
-        return reply
-    final = check_with_retry(question, chunks, reply, pages, answerer).final
-    return final.rejection if isinstance(final, RejectedAttempt) else final
+        return Checked(reply, ())
+    return check_with_retry(question, chunks, reply, pages, answerer)
 
 
 def answer_from_excerpts(

@@ -13,7 +13,6 @@ from datasheet_assistant.retrieve import Chunk, Index, chunk_pages
 from datasheet_assistant.verify import (
     Answer,
     Citation,
-    Rejected,
     RejectionReason,
     Verified,
 )
@@ -59,7 +58,7 @@ class FakeAnswerer:
 def test_verified_answer_reaches_the_user() -> None:
     outcome = ask(QUESTION, INDEX, PAGES, FakeAnswerer(VERIFIABLE))
 
-    assert outcome == Verified(VERIFIABLE)
+    assert outcome == Checked(Verified(VERIFIABLE), ())
 
 
 def test_answerer_sees_retrieved_excerpts() -> None:
@@ -75,21 +74,24 @@ def test_answer_failing_every_revision_is_rejected() -> None:
 
     outcome = ask(QUESTION, INDEX, PAGES, answerer)
 
-    assert isinstance(outcome, Rejected)
-    assert outcome.reason == RejectionReason.NUMBER_NOT_IN_QUOTES
+    assert isinstance(outcome.final, RejectedAttempt)
+    assert outcome.final.answer == UNVERIFIABLE
+    assert outcome.final.rejection.reason == RejectionReason.NUMBER_NOT_IN_QUOTES
+    assert len(outcome.revised) == MAX_REVISIONS
     assert len(answerer.histories) == 1 + MAX_REVISIONS
 
 
 def test_ask_shows_an_answer_verified_on_revision() -> None:
     outcome = ask(QUESTION, INDEX, PAGES, FakeAnswerer(UNVERIFIABLE, VERIFIABLE))
 
-    assert outcome == Verified(VERIFIABLE)
+    assert outcome.final == Verified(VERIFIABLE)
+    assert [attempt.answer for attempt in outcome.revised] == [UNVERIFIABLE]
 
 
 def test_unanswerable_passes_through() -> None:
     outcome = ask(QUESTION, INDEX, PAGES, FakeAnswerer(Unanswerable()))
 
-    assert outcome == Unanswerable()
+    assert outcome == Checked(Unanswerable(), ())
 
 
 def test_question_matching_no_excerpt_is_unanswerable_without_asking() -> None:
@@ -97,7 +99,7 @@ def test_question_matching_no_excerpt_is_unanswerable_without_asking() -> None:
 
     outcome = ask("zzz qqq", INDEX, PAGES, answerer)
 
-    assert outcome == Unanswerable()
+    assert outcome == Checked(Unanswerable(), ())
     assert answerer.excerpts == []
 
 
