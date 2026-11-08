@@ -4,6 +4,7 @@ import { z } from "zod";
 // once, so a slow answer can take several minutes before it fails.
 const ASK_TIMEOUT_MS = 300_000;
 const DATASHEETS_TIMEOUT_MS = 10_000;
+// Matches MAX_QUESTION_CHARACTERS in server.py; a Python test checks this line.
 export const MAX_QUESTION_CHARACTERS = 500;
 
 const BoxSchema = z.object({
@@ -26,19 +27,12 @@ const CitationSchema = z.object({
     .nullable(),
 });
 
-const RejectionReasonSchema = z.enum([
-  "no_citations",
-  "unknown_datasheet",
-  "page_out_of_range",
-  "quote_too_short",
-  "quote_not_on_page",
-  "number_not_in_quotes",
-]);
 
 const DraftSchema = z.object({
   segments: z.array(z.object({ text: z.string(), number: z.string().nullable() })),
   citations: z.array(CitationSchema),
-  rejection: z.object({ reason: RejectionReasonSchema, detail: z.string() }).nullable(),
+  // A reason added to the check later is still shown, by its detail alone.
+  rejection: z.object({ reason: z.string(), detail: z.string() }).nullable(),
 });
 
 const AskResponseSchema = z.discriminatedUnion("outcome", [
@@ -51,7 +45,6 @@ const DatasheetsSchema = z.array(z.object({ name: z.string(), page_count: z.numb
 
 export type Box = z.infer<typeof BoxSchema>;
 export type Citation = z.infer<typeof CitationSchema>;
-export type RejectionReason = z.infer<typeof RejectionReasonSchema>;
 export type Draft = z.infer<typeof DraftSchema>;
 export type AskResponse = z.infer<typeof AskResponseSchema>;
 export type Datasheet = z.infer<typeof DatasheetsSchema>[number];

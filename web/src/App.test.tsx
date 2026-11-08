@@ -103,6 +103,14 @@ describe("first visit", () => {
     expect(askBodies).toEqual([{ question: "What is the typical sleep current of the BME280?" }]);
   });
 
+  it("takes the question from the address, cut to the limit", () => {
+    window.history.replaceState(null, "", `/?q=${"x".repeat(600)}`);
+
+    render(<App />);
+
+    expect(screen.getByLabelText<HTMLTextAreaElement>("Ask a datasheet").value).toHaveLength(500);
+  });
+
   it("cannot ask an empty question", () => {
     render(<App />);
 
@@ -191,6 +199,33 @@ describe("a withheld answer", () => {
     expect(screen.getByText(/dashed outline marks what it quoted/)).toBeTruthy();
     expect(document.querySelectorAll(".mark.unverified")).toHaveLength(1);
     expect(document.querySelectorAll(".number")).toHaveLength(0);
+  });
+});
+
+describe("a withheld answer citing a missing page first", () => {
+  it("shows the first cited page that exists", async () => {
+    const missingFirst = {
+      ...REJECTED_DRAFT,
+      citations: [{ ...citation(99, "beyond the end", false), marks: null }, citation(26, "‘110’: 10 ms", false)],
+    };
+
+    await ask("Standby time?", {
+      status: 200,
+      body: { outcome: "withheld", answer: null, drafts: [missingFirst] },
+    });
+
+    expect((await screen.findByRole("img")).getAttribute("src")).toBe("/api/pages/bme280/26.png");
+  });
+
+  it("shows a rejection reason it does not know by its detail", async () => {
+    const unknownReason = { ...REJECTED_DRAFT, rejection: { reason: "new_rule", detail: "a new rule failed" } };
+
+    await ask("Standby time?", {
+      status: 200,
+      body: { outcome: "withheld", answer: null, drafts: [unknownReason] },
+    });
+
+    expect(await screen.findByText("a new rule failed")).toBeTruthy();
   });
 });
 

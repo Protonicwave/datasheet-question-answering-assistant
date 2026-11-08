@@ -1,7 +1,7 @@
-import type { Citation, Draft, RejectionReason } from "./api";
+import type { Citation, Draft } from "./api";
 import { FailIcon, PassIcon, VerifiedIcon, WarningIcon } from "./icons";
 
-const REJECTION_SENTENCES: ReadonlyMap<RejectionReason, string> = new Map([
+const REJECTION_SENTENCES: ReadonlyMap<string, string> = new Map([
   ["no_citations", "It cited no passage."],
   ["unknown_datasheet", "It cited a datasheet that is not in the set."],
   ["page_out_of_range", "It cited a page the datasheet does not have."],

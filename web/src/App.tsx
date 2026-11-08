@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ApiError,
   askQuestion,
   listDatasheets,
+  MAX_QUESTION_CHARACTERS,
   type AskResponse,
   type Citation,
   type Datasheet,
@@ -25,24 +26,20 @@ export function App() {
   const [selected, setSelected] = useState(0);
   const [litNumber, setLitNumber] = useState<string | null>(null);
   const datasheets = useDatasheets();
-  const latestRequest = useRef(0);
-
   async function submit(text: string) {
-    const requestId = ++latestRequest.current;
     setQuestion(text);
     setView({ kind: "loading", question: text });
     setSelected(0);
     setLitNumber(null);
     writeQuestionToUrl(text);
-    let next: View;
+    // Every way to ask is disabled while loading, so no answer can arrive
+    // after a newer question.
     try {
-      next = { kind: "answered", response: await askQuestion(text) };
+      setView({ kind: "answered", response: await askQuestion(text) });
     } catch (error: unknown) {
       if (!(error instanceof ApiError)) throw error;
-      next = { kind: "failed", question: text, message: error.message };
+      setView({ kind: "failed", question: text, message: error.message });
     }
-    // A newer question replaces this one; its answer arrives too late to show.
-    if (requestId === latestRequest.current) setView(next);
   }
 
   const shown = shownPage(view, selected);
@@ -95,10 +92,18 @@ function shownPage(view: View, selected: number): PageMarking | null {
     case "verified":
       return viewable(response.answer.citations[selected], true);
     case "withheld":
-      return viewable(response.drafts.at(-1)?.citations[0], false);
+      return firstViewable(response.drafts.at(-1)?.citations ?? []);
     case "unanswerable":
       return null;
   }
+}
+
+function firstViewable(citations: readonly Citation[]): PageMarking | null {
+  for (const citation of citations) {
+    const marking = viewable(citation, false);
+    if (marking !== null) return marking;
+  }
+  return null;
 }
 
 function viewable(citation: Citation | undefined, isVerified: boolean): PageMarking | null {
@@ -120,7 +125,9 @@ function useDatasheets(): readonly Datasheet[] | null {
 }
 
 function questionFromUrl(): string {
-  return new URLSearchParams(window.location.search).get(QUESTION_PARAMETER) ?? "";
+  const question = new URLSearchParams(window.location.search).get(QUESTION_PARAMETER) ?? "";
+  // The text box limits typing, not a value set from a link.
+  return question.slice(0, MAX_QUESTION_CHARACTERS);
 }
 
 function writeQuestionToUrl(question: string) {

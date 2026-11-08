@@ -9,7 +9,14 @@ shown.
 
 ## Install
 
-Requires Python 3.12 or later and [uv](https://docs.astral.sh/uv/).
+On Windows, double-click `run.bat`. It installs uv and Node.js if they are
+missing (uv with its official installer, Node.js LTS with winget), asks for
+an Anthropic API key if `ANTHROPIC_API_KEY` is not set, installs the
+dependencies, builds the web page, downloads the datasheets on first use and
+opens the assistant in the browser. Steps already done are skipped.
+
+Otherwise, the assistant requires Python 3.12 or later and
+[uv](https://docs.astral.sh/uv/).
 
 ```sh
 uv sync
@@ -57,7 +64,8 @@ uv run datasheet-assistant serve
 
 Then open <http://127.0.0.1:8000>. `serve` listens on this machine only and
 takes `--port` to change the port. While working on the page, run
-`npm run dev` in `web/` beside `serve`; Vite forwards `/api` to it.
+`npm run dev` in `web/` beside `serve` on its default port; Vite forwards
+`/api` to port 8000.
 
 ## Evaluate
 
