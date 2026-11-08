@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from datasheet_assistant.ingest import Source, extract_pages, ingest, load_sources
+from datasheet_assistant.ingest import (
+    Source,
+    extract_pages,
+    ingest,
+    load_pages,
+    load_sources,
+)
 from tests.pdf_builder import build_pdf
 
 URL = "https://example.com/part.pdf"
@@ -151,3 +157,49 @@ def test_loads_valid_sources(tmp_path: Path) -> None:
 def test_rejects_invalid_sources(tmp_path: Path, body: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         load_sources(write_sources(tmp_path, body))
+
+
+def test_loads_the_pages_ingest_wrote(tmp_path: Path) -> None:
+    pdf = build_pdf(["Supply voltage 3.6 V", "Operating range -40 to 85"])
+    ingest(
+        [make_source(pdf)],
+        tmp_path / "pdfs",
+        tmp_path / "pages",
+        download=lambda url: pdf,
+    )
+
+    pages = load_pages(tmp_path / "pages")
+
+    assert list(pages) == ["part"]
+    assert len(pages["part"]) == 2
+    assert "3.6 V" in pages["part"][0]
+
+
+def test_load_pages_asks_for_ingest_when_directory_is_empty(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="run the ingest command first"):
+        load_pages(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("record", "message"),
+    [
+        ("not json", "malformed page file"),
+        ('{"datasheet": "part"}', "malformed page file"),
+        ('{"datasheet": "other", "pages": []}', "expected datasheet 'part'"),
+        (
+            '{"datasheet": "part", "pages": [{"page": 2, "text": "x"}]}',
+            "numbered from 1",
+        ),
+        (
+            '{"datasheet": "part", "pages": [{"page": 1, "text": 3}]}',
+            "to be a string",
+        ),
+    ],
+)
+def test_load_pages_rejects_malformed_file(
+    tmp_path: Path, record: str, message: str
+) -> None:
+    (tmp_path / "part.json").write_text(record, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_pages(tmp_path)

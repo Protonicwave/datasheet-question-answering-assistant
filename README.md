@@ -26,6 +26,17 @@ uv run datasheet-assistant ingest
 The PDFs are not part of this repository. `sources.toml` gives the URL and
 SHA-256 of each one so the set can be reproduced exactly.
 
+Ask a question. This needs an Anthropic API key in `ANTHROPIC_API_KEY`:
+
+```sh
+uv run datasheet-assistant ask "What is the maximum interface supply voltage VDDIO of the BMP390?"
+```
+
+The answer is printed with the datasheet, page and passage each citation
+quotes. If the datasheets do not answer the question, or the answer fails
+the check, it prints "The datasheet does not say." with the reason an answer
+was withheld.
+
 ## Test
 
 ```sh

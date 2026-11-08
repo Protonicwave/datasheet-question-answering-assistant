@@ -115,6 +115,33 @@ def ingest(
         )
 
 
+def load_pages(pages_dir: Path) -> dict[str, list[str]]:
+    """Read the page files `ingest` wrote, as datasheet name to page texts in order.
+
+    Raises ValueError if there are no page files or one is malformed.
+    """
+    paths = sorted(pages_dir.glob("*.json"))
+    if not paths:
+        raise ValueError(f"{pages_dir}: no page files; run the ingest command first")
+    pages = {}
+    for path in paths:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            texts = [entry["text"] for entry in record["pages"]]
+            numbers = [entry["page"] for entry in record["pages"]]
+            name = record["datasheet"]
+        except (json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ValueError(f"{path}: malformed page file: {error}") from error
+        if name != path.stem:
+            raise ValueError(f"{path}: expected datasheet {path.stem!r}, got {name!r}")
+        if numbers != list(range(1, len(texts) + 1)):
+            raise ValueError(f"{path}: expected pages numbered from 1 without gaps")
+        if not all(isinstance(text, str) for text in texts):
+            raise ValueError(f"{path}: expected every page text to be a string")
+        pages[name] = texts
+    return pages
+
+
 def _fetch(source: Source, pdf_dir: Path, download: Callable[[str], bytes]) -> bytes:
     cached = pdf_dir / f"{source.name}.pdf"
     if cached.exists():
