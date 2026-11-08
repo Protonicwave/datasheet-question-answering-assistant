@@ -1,4 +1,32 @@
 \section{Reproducing the results}
 \label{sec:reproduction}
 
-Each run directory under \texttt{eval/runs/} was produced by one command at a recorded commit.
+The repository's README gives installation. A run needs the datasheets ingested and an Anthropic API key in the environment variable \texttt{ANTHROPIC\_API\_KEY}. One command then produces each run:
+
+\begin{lstlisting}[language={}]
+uv run datasheet-assistant ingest
+uv run datasheet-assistant evaluate --questions eval/held_out.jsonl --runs 3
+\end{lstlisting}
+
+Each run writes a new directory under \texttt{eval/runs/} holding every answer with its citations and revisions (\texttt{answers.jsonl}), the score of each question per arm and run (\texttt{scores.csv}) and the counts per arm (\texttt{summary.csv}, \texttt{summary.md}). \Cref{tab:runs} lists the committed runs. A rerun makes new model requests, so its counts will differ from these within roughly the spread the tables show.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Committed evaluation runs. The held-out set was committed at \texttt{4b9dc7c} and run once at that commit.}
+  \label{tab:runs}
+  \begin{tabular}{llll}
+    \toprule
+    \head{Run directory} & \head{Question set} & \head{Arms} & \head{Results commit} \\
+    \midrule
+    \texttt{20261108T120946Z} & development & A to C & \texttt{be39273} \\
+    \texttt{20261108T125938Z} & development & A to D, up to two revisions & \texttt{91bd5e1} \\
+    \texttt{20261108T135144Z} & held-out & A to D, one revision & \texttt{164ba5b} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The figure in \cref{sec:results} is drawn from the held-out \texttt{summary.csv} by \texttt{docs/report/figures/results.py}:
+
+\begin{lstlisting}[language={}]
+uv run --group docs python docs/report/figures/results.py
+\end{lstlisting}

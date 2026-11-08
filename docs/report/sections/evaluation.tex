@@ -1,4 +1,22 @@
 \section{Evaluation}
 \label{sec:evaluation}
 
-Four arms answer the same questions on six datasheets, three runs each, and code scores every answer against expected numbers and keywords.
+Four arms answer the same questions on the six datasheets, three runs each, and code scores every answer against the values the datasheet states. The design aims to make each arm differ from the last in one step only, and to keep the questions used to build the system apart from the questions that measure it.
+
+\subsection{Arms}
+
+Arm A is the model alone: the same model and output schema as the assistant, with a prompt that supplies no datasheet text and asks for no citations. Arm B is the model answering from the eight retrieved excerpts, with its answer shown unchecked. Arm C passes each of B's stored answers through the check and withholds those that fail; it makes no model request of its own, so the check is the only difference between B and C. Arm D starts from the same stored answer and, when the check rejects it, asks for one revision as in \cref{sec:system}. D therefore differs from C only by the revision, and from B by the check and the revision together.
+
+Each arm ran three times on each question set, with up to four requests in flight. Three runs show how far the counts move from run to run; they are too few for a confidence interval, and the tables give the lowest and highest run instead.
+
+\subsection{Questions}
+
+A question names one datasheet and states whether that datasheet answers it. An answerable question lists the numbers and keywords a correct answer must state and the pages that state them, and may list alternative sets for the same value in other units, such as \qty{0.5}{\hecto\pascal} for \qty{50}{\pascal}. When the question file is loaded, code confirms that every expected number of the first set appears on one of the listed pages, so a mistyped value fails before any run.
+
+The development set holds 100 questions, 80 answerable and 20 not, between 15 and 18 per datasheet. Candidates were drafted with Claude, and I checked each answer and page against the PDF. The answers to these questions were read while the system was built: the withheld answers of arm C on this set are what led to the revision step. Its figures therefore describe the system it shaped and are not the result.
+
+The held-out set holds 50 further questions on the same six datasheets, 40 answerable and 10 not, the same proportion as the development set. It was written after the system was finished. Three Claude agents drafted 60 candidates, each with the verbatim passage that answers it, and were shown the development questions so as not to repeat them, but nothing about the revision step or its failures. Claude then removed nine doubtful candidates (an ambiguous value, an unclear table column, a question too close to a development one, a value the scorer could not read) and checked the remaining flagged ones against the rendered pages. I approved that selection without checking each question by hand, so the held-out set was drafted and checked by Claude, not by me. The set was committed before it was first run, the code was frozen at that commit, and the set was run once; the results are reported unchanged.
+
+\subsection{Scoring}
+
+Code scores every answer; no model judges another. An answer to an answerable question is \emph{correct} if it states every number and keyword of any one accepted set, keywords matching as whole words so that \enquote{Pa} is not found in \enquote{hPa}. It is \emph{wrong} if it states numbers but none from any accepted set, and any answer to an unanswerable question is wrong. Declining an answerable question, whether the model says the datasheet does not say or the check withholds the answer, is a \emph{false refusal}; declining an unanswerable one is a \emph{correct refusal}. Everything else is \emph{unplaced} and left for a person to judge: an answer that states some expected values but not all, or no numbers at all.
