@@ -1,0 +1,45 @@
+\documentclass[11pt]{article}
+\usepackage{laboratory}
+
+\title{Using the datasheet assistant}
+\author{Shlok Bhusal}
+\date{November 2026}
+\source{github.com/Protonicwave/\newline datasheet-question-answering-assistant}
+
+\begin{document}
+
+\maketitle
+
+The assistant answers questions about the BME280, BMP390, BMI270, BMM350, BMA456 and BHI360. It shows an answer only when code has confirmed that the quoted passage is on the cited page and that every number in the answer is in it.
+
+\section*{Start it}
+
+On Windows, double-click \texttt{run.bat}. It installs what is missing, asks for an Anthropic API key, downloads the datasheets on first use and opens \texttt{http://127.0.0.1:8000}, reachable from your machine only. Every question is charged to the key. Elsewhere, follow the README.
+
+\section*{Ask well}
+
+Name the part, so the search reads only its datasheet, and ask for one value in the datasheet's own words, such as a register name or VDDIO. Leave out digits you do not need, such as a field's bit range: the answer must find them in its quote.
+
+\section*{Read the outcome}
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.25\linewidth}X@{}}
+  \toprule
+  \head{Outcome} & \head{What it means and what to do} \\
+  \midrule
+  Verified answer & Every number is in the highlighted passage. Check its conditions (supply, temperature, mode) and, on the page image, whether it is a minimum, typical or maximum. \\
+  \addlinespace
+  No verified answer & The drafts failed the check, for the reason shown. The datasheet may still say: open the outlined page, or ask more narrowly. \\
+  \addlinespace
+  The datasheet does not say & No passage answered. Try the figures and application notes. \\
+  \bottomrule
+\end{tabularx}
+
+\section*{What it cannot read}
+
+Graphs, timing diagrams and drawings; which table column a value sat in; numbers written with a thousands separator; and units the datasheet does not use, so ask in the datasheet's unit.
+
+\section*{How far to trust it}
+
+On 50 test questions run three times, the assistant answered 32.7 of the 40 answerable ones correctly per run, declined 4.0, and declined all 10 that the datasheets cannot answer. Its one wrong answer in three runs is a value the BMA456 datasheet states on two pages and contradicts on a third. The model without the datasheets gave 4.3 wrong answers per run. The check proves where a number came from, not that it is the row you need, and the test questions were checked by Claude rather than an engineer. The full method and results are in \texttt{docs/report/report.pdf}.
+
+\end{document}
