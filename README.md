@@ -8,7 +8,8 @@ model with the reason, once; if the revision does not pass, no answer is
 shown.
 
 The method and the held-out results are written up in
-[docs/report/report.pdf](docs/report/report.pdf).
+[docs/report/report.pdf](docs/report/report.pdf). A one-page guide for
+engineers using the assistant is in [docs/guide/guide.pdf](docs/guide/guide.pdf).
 
 ## Install
 
@@ -130,6 +131,10 @@ and commit it after changing the source. `laboratory.sty`,
 `laboratory-base.sty` and `figures/laboratory.mplstyle` are unmodified
 copies of a shared house style (version 2026/11/07); replace them whole
 rather than editing them.
+
+The guide in `docs/guide/` builds the same way, with no figure: run
+`latexmk` there and copy `build/main.pdf` to `guide.pdf`. It must stay on
+one page, and its figures must match the report's.
 
 ## Test
 
