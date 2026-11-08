@@ -36,13 +36,27 @@ def read_counts(summary: Path) -> dict[tuple[str, str], list[int]]:
     return counts
 
 
+def _runs_within(
+    counts: dict[tuple[str, str], list[int]], arm: str, category: str, limit: int
+) -> list[int]:
+    """The counts for one arm and category, refusing any the axis would clip."""
+    runs = counts.get((arm, category))
+    if not runs:
+        raise ValueError(f"no counts for {arm} {category} in {RUN / 'summary.csv'}")
+    if max(runs) > limit:
+        raise ValueError(
+            f"{arm} {category} reaches {max(runs)}, above the axis limit {limit}"
+        )
+    return runs
+
+
 def main() -> None:
     counts = read_counts(RUN / "summary.csv")
     plt.style.use(FIGURES / "laboratory.mplstyle")
     figure, axes_row = plt.subplots(1, len(PANELS), sharey=True, figsize=(6.89, 1.7))
     rows = range(len(ARMS))
     for axes, (category, title, limit, step) in zip(axes_row, PANELS, strict=True):
-        runs = [counts[arm, category] for arm, _ in ARMS]
+        runs = [_runs_within(counts, arm, category, limit) for arm, _ in ARMS]
         means = [sum(values) / len(values) for values in runs]
         axes.hlines(
             rows,
