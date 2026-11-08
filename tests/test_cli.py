@@ -71,7 +71,7 @@ def test_evaluate_without_api_key_names_the_variable(
 ) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    assert main(["evaluate"]) == 1
+    assert main(["evaluate", "--questions", "q.jsonl"]) == 1
     assert "ANTHROPIC_API_KEY is not set" in capsys.readouterr().err
 
 
@@ -83,5 +83,15 @@ def test_evaluate_before_ingest_says_to_ingest(
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.chdir(tmp_path)
 
-    assert main(["evaluate", "--runs", "1"]) == 1
+    assert main(["evaluate", "--questions", "q.jsonl", "--runs", "1"]) == 1
     assert "run the ingest command first" in capsys.readouterr().err
+
+
+def test_evaluate_requires_a_question_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["evaluate"])
+
+    assert exit_info.value.code == 2
+    assert "--questions" in capsys.readouterr().err

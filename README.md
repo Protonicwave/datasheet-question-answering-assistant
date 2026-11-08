@@ -39,12 +39,13 @@ was withheld.
 
 ## Evaluate
 
-Run the question set in `eval/questions.jsonl` through three arms: the model
-alone (A), the model answering from retrieved excerpts (B), and B's answers
-passed through the check (C). Each arm runs three times by default:
+Run a question set through three arms: the model alone (A), the model
+answering from retrieved excerpts (B), and B's answers passed through the
+check (C). Each arm runs three times by default. `eval/development.jsonl`
+holds the questions whose results were read while building the assistant:
 
 ```sh
-uv run datasheet-assistant evaluate --runs 3
+uv run datasheet-assistant evaluate --questions eval/development.jsonl --runs 3
 ```
 
 Results go to a new directory under `eval/runs/`: every answer with its

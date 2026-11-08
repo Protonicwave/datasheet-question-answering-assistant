@@ -28,7 +28,6 @@ from datasheet_assistant.verify import Rejected, Verified
 SOURCES_PATH = Path("datasheets/sources.toml")
 PDF_DIR = Path("data/pdfs")
 PAGES_DIR = Path("data/pages")
-QUESTIONS_PATH = Path("eval/questions.jsonl")
 RUNS_DIR = Path("eval/runs")
 DEFAULT_RUNS = 3
 API_KEY_VARIABLE = "ANTHROPIC_API_KEY"
@@ -51,6 +50,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="run the question set through the model alone, the model with "
         "search, and search with the check",
     )
+    evaluate_parser.add_argument(
+        "--questions",
+        type=Path,
+        required=True,
+        help="question file, such as eval/development.jsonl",
+    )
     evaluate_parser.add_argument("--runs", type=int, default=DEFAULT_RUNS)
     arguments = parser.parse_args(argv)
 
@@ -60,7 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif arguments.command == "ask":
             output = _ask(arguments.question)
         else:
-            output = _evaluate(arguments.runs)
+            output = _evaluate(arguments.questions, arguments.runs)
     except (ValueError, OSError, AnswerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
@@ -83,10 +88,10 @@ def _ask(question: str) -> str:
     return render(ask(question, Index(chunk_pages(pages)), pages, answerer))
 
 
-def _evaluate(runs: int) -> str:
+def _evaluate(questions_path: Path, runs: int) -> str:
     client = connect(_api_key())
     pages = load_pages(PAGES_DIR)
-    questions = load_questions(QUESTIONS_PATH, pages)
+    questions = load_questions(questions_path, pages)
     directory = RUNS_DIR / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     records = evaluate(
@@ -98,7 +103,8 @@ def _evaluate(runs: int) -> str:
     )
     answerable = sum(question.expected is not None for question in questions)
     heading = (
-        f"{len(questions)} questions ({answerable} answerable), "
+        f"{questions_path.as_posix()}: {len(questions)} questions "
+        f"({answerable} answerable), "
         f"{runs} runs, model {MODEL}."
     )
     write_run(records, heading, directory)
