@@ -158,3 +158,13 @@ def test_reports_the_first_failing_citation() -> None:
     )
 
     assert rejection(verify(claim, PAGES)) is RejectionReason.UNKNOWN_DATASHEET
+
+
+def test_rejects_wrong_second_dimension() -> None:
+    pages = {"bmi270": ["14 pins, footprint 2.5x3.0mm, height 0.83mm"]}
+    claim = answer(
+        "The footprint is 2.5x4.0mm.",
+        cite("14 pins, footprint 2.5x3.0mm, height 0.83mm", page=1, datasheet="bmi270"),
+    )
+
+    assert rejection(verify(claim, pages)) is RejectionReason.NUMBER_NOT_IN_QUOTES

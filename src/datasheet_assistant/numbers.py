@@ -10,14 +10,16 @@ type Number = Decimal | str
 
 # Digits directly after a letter or underscore belong to a name (BME280, I2C,
 # SPI3, footnote markers), not a quantity. Letters after the digits are units
-# (3.6V, 10ms) and do not stop a match. A minus is a sign only when it does
-# not follow a letter, digit or closing bracket, so "1.71-3.6" is a range.
+# (3.6V, 10ms) and do not stop a match. The exception is an "x" between
+# dimensions: "2.5x3.0" states 2.5 and 3.0. No match starts after a digit and
+# full stop, so a decimal is never split into fragments. A minus is a sign only when it
+# does not follow a letter, digit or closing bracket, so "1.71-3.6" is a range.
 NUMBER = re.compile(
     r"""
-    (?<![A-Za-z0-9_])
+    (?:(?<![A-Za-z0-9_])(?<!\d\.)|(?<=\d[xX]))
     (?:
         (?P<hex>0[xX][0-9A-Fa-f]+)(?![A-Za-z0-9_])
-      | (?P<decimal>(?<![A-Za-z0-9_)\]])-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)
+      | (?P<decimal>(?:(?<![A-Za-z0-9_)\]])-)?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)
     )
     """,
     re.VERBOSE,
