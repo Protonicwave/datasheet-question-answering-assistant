@@ -1,0 +1,57 @@
+\section{Results}
+\label{sec:results}
+
+On the held-out set, \cref{tab:held-out,fig:results} show search removing almost every wrong answer, the check alone costing a fifth of the correct answers, and the retry recovering nearly all of them. \Cref{tab:development} gives the development figures that shaped the retry.
+
+\begin{table}[tbp]
+  \centering
+  \caption{Held-out set: 50 questions, 40 answerable, three runs per arm. Each count is the mean over the runs, with the lowest and highest run in brackets where they differ. No arm returned an API error.}
+  \label{tab:held-out}
+  \begin{tabular}{
+    l
+    S[table-format=2.1] l
+    S[table-format=1.1] l
+    S[table-format=2.1] l
+    S[table-format=2.1] l
+    S[table-format=1.1] l
+  }
+    \toprule
+    \head{Arm} & \multicolumn{2}{l}{\head{Correct}} & \multicolumn{2}{l}{\head{Wrong}} & \multicolumn{2}{l}{\head{Correct refusal}} & \multicolumn{2}{l}{\head{False refusal}} & \multicolumn{2}{l}{\head{Unplaced}} \\
+    \midrule
+    A: model alone & \steady{26.0} & \runs{4.3}{3}{7} & \runs{9.7}{9}{10} & \runs{9.7}{8}{11} & \runs{0.3}{0}{1} \\
+    B: model with search & \runs{33.3}{33}{34} & \runs{0.3}{0}{1} & \steady{10.0} & \runs{3.3}{3}{4} & \steady{3.0} \\
+    C: search with check & \runs{26.0}{25}{27} & \runs{0.3}{0}{1} & \steady{10.0} & \runs{10.7}{9}{12} & \steady{3.0} \\
+    D: search, check and retry & \runs{32.7}{32}{34} & \runs{0.3}{0}{1} & \steady{10.0} & \runs{4.0}{3}{5} & \steady{3.0} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[tbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/results}
+  \caption{Held-out results per arm. Each dot is the mean of three runs and the bar spans the lowest to the highest run. Panel (c) counts all 50 questions, since answering an unanswerable question is also wrong.}
+  \label{fig:results}
+\end{figure}
+
+\begin{table}[tbp]
+  \centering
+  \caption{Development set: 100 questions, 80 answerable, three runs per arm. These questions were read while the retry was designed, so the figures show why it exists and are not the result. No arm returned an API error.}
+  \label{tab:development}
+  \begin{tabular}{
+    l
+    S[table-format=2.1] l
+    S[table-format=2.1] l
+    S[table-format=2.1] l
+    S[table-format=2.1] l
+    S[table-format=1.1] l
+  }
+    \toprule
+    \head{Arm} & \multicolumn{2}{l}{\head{Correct}} & \multicolumn{2}{l}{\head{Wrong}} & \multicolumn{2}{l}{\head{Correct refusal}} & \multicolumn{2}{l}{\head{False refusal}} & \multicolumn{2}{l}{\head{Unplaced}} \\
+    \midrule
+    A: model alone & \runs{59.7}{58}{62} & \runs{11.0}{9}{13} & \runs{14.3}{13}{15} & \runs{15.0}{12}{17} & \steady{0.0} \\
+    B: model with search & \steady{77.0} & \steady{0.0} & \steady{20.0} & \steady{3.0} & \steady{0.0} \\
+    C: search with check & \runs{52.7}{52}{54} & \steady{0.0} & \steady{20.0} & \runs{27.3}{26}{28} & \steady{0.0} \\
+    D: search, check and retry & \runs{76.7}{76}{77} & \steady{0.0} & \steady{20.0} & \steady{3.0} & \runs{0.3}{0}{1} \\
+    \bottomrule
+  \end{tabular}
+\end{table}

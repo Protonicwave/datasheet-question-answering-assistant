@@ -1,0 +1,29 @@
+\documentclass[11pt]{article}
+\usepackage{laboratory}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+% A count averaged over three runs, with the lowest and highest run beside it.
+\newcommand{\runs}[3]{\num{#1} & {\footnotesize\color{black!60}(\numrange{#2}{#3})}}
+\newcommand{\steady}[1]{\num{#1} &}
+
+\title{Verified answers from component datasheets}
+\author{Shlok Bhusal}
+\date{November 2026}
+\source{github.com/Protonicwave/\newline datasheet-question-answering-assistant}
+
+\begin{document}
+
+\maketitle
+
+\input{sections/introduction}
+\input{sections/system}
+\input{sections/evaluation}
+\input{sections/results}
+\input{sections/limits}
+\input{sections/conclusion}
+
+\appendix
+\input{sections/reproduction}
+
+\end{document}

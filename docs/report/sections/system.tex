@@ -1,0 +1,37 @@
+\section{System}
+\label{sec:system}
+
+Each question passes through retrieval, an answer with citations, the check and at most one revision, and ends in one of three outcomes, as \cref{fig:pipeline} shows.
+
+\begin{figure}[tbp]
+  \centering
+  \begin{tikzpicture}[
+      font=\sffamily\small,
+      node distance=10mm and 8mm,
+      box/.style={draw=black!70, rounded corners=2pt, align=center, inner sep=4pt, minimum height=11mm},
+      check/.style={box, draw=prussian, very thick},
+      outcome/.style={align=center, inner sep=2pt, text=prussian},
+      flow/.style={-{Stealth[length=2mm]}, black!70},
+      label/.style={font=\sffamily\footnotesize},
+    ]
+    \node[box] (question) {Question};
+    \node[box, right=of question] (search) {BM25 search\\8 excerpts};
+    \node[box, right=of search] (answer) {Model answer\\with citations};
+    \node[check, right=of answer] (check) {Check\\quote and numbers};
+    \node[outcome, right=of check] (shown) {Verified answer\\shown};
+    \node[box, below=of check] (revise) {One revision\\with the reason};
+    \node[outcome, right=of revise] (withheld) {No verified\\answer};
+    \node[outcome, below=of answer] (none) {The datasheet\\does not say};
+
+    \draw[flow] (question) -- (search);
+    \draw[flow] (search) -- (answer);
+    \draw[flow] (answer) -- (check);
+    \draw[flow] (check) -- node[label, above] {pass} (shown);
+    \draw[flow] ([xshift=-5mm]check.south) -- node[label, left] {fail} ([xshift=-5mm]revise.north);
+    \draw[flow] ([xshift=5mm]revise.north) -- node[label, right] {recheck} ([xshift=5mm]check.south);
+    \draw[flow] (revise) -- node[label, above] {fail} (withheld);
+    \draw[flow] (answer) -- node[label, left] {unanswerable} (none);
+  \end{tikzpicture}
+  \caption{The path of one question. Only an answer that passes the check is shown. A rejected answer is sent back once with the reason it failed, and a revision that also fails is withheld.}
+  \label{fig:pipeline}
+\end{figure}

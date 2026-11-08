@@ -1,0 +1,49 @@
+# Laboratory house style for matplotlib figures at document size: 9 pt type in
+# the document's own faces, typeset by LuaLaTeX through the pgf backend.
+#
+# A style cannot choose the backend, so save with
+#     figure.savefig("name.pdf", backend="pgf")
+# and draw each figure at the width the document includes it, so its type
+# stays at the size set here. The default size is the full 175 mm measure.
+#
+# The preamble repeats the faces laboratory-base.sty sets, because the pgf
+# backend runs LuaLaTeX in a temporary folder where that package cannot be found.
+# Its mathcode 32768 is the "8000 of the package, since a style line cannot hold
+# an unpaired double quote.
+
+pgf.texsystem: lualatex
+pgf.rcfonts: False
+pgf.preamble: \usepackage{fontspec}\usepackage{unicode-math}\setmainfont{Erewhon}[Extension=.otf,UprightFont=*-Regular,ItalicFont=*-Italic,Scale=0.95]\setsansfont{SourceSans3}[Extension=.otf,UprightFont=*-Regular,ItalicFont=*-RegularIt,Scale=MatchUppercase]\setmathfont{Erewhon-Math.otf}[Scale=0.95]\AtBeginDocument{\Umathcharnumdef\laboratoryslash=\Umathcodenum`\/\relax\begingroup\lccode`\~=`\/\lowercase{\endgroup\def~}{\mkern-2mu\laboratoryslash\mkern-2mu}\mathcode`\/=32768\relax}
+
+font.family: sans-serif
+font.size: 9
+axes.labelsize: 9
+axes.titlesize: 9
+axes.titlelocation: left
+axes.titlepad: 4
+xtick.labelsize: 9
+ytick.labelsize: 9
+legend.fontsize: 9
+legend.frameon: False
+axes.unicode_minus: True
+
+# Prussian blue for measurements, near black for models, grey for guides.
+axes.prop_cycle: cycler("color", ["1F4A73", "1A1A1A", "999999"])
+lines.linewidth: 1.0
+lines.markersize: 3.2
+errorbar.capsize: 0
+
+axes.linewidth: 0.6
+axes.spines.top: False
+axes.spines.right: False
+xtick.major.width: 0.6
+ytick.major.width: 0.6
+xtick.major.size: 3
+ytick.major.size: 3
+xtick.direction: out
+ytick.direction: out
+
+# 175 mm by 70 mm.
+figure.figsize: 6.89, 2.76
+figure.constrained_layout.use: True
+savefig.format: pdf
