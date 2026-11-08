@@ -151,3 +151,12 @@ def test_failed_revision_request_raises() -> None:
 
     with pytest.raises(AnswerError, match="request failed"):
         check_with_retry(QUESTION, (), UNVERIFIABLE, PAGES, answerer)
+
+
+def test_ask_raises_when_the_revision_request_fails() -> None:
+    answerer = FakeAnswerer(
+        UNVERIFIABLE, AnswerError("Claude API request failed: down")
+    )
+
+    with pytest.raises(AnswerError, match="request failed"):
+        ask(QUESTION, INDEX, PAGES, answerer)
