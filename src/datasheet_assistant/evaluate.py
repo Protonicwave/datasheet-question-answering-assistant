@@ -207,14 +207,13 @@ def _retried_record(
 def _withheld_record(
     run: int, question: Question, arm: Arm, attempt: RejectedAttempt
 ) -> Record:
-    rejection = attempt.rejection
     return Record(
         run,
         question,
         arm,
         Outcome.WITHHELD,
         attempt.answer,
-        f"{rejection.reason}: {rejection.detail}",
+        attempt.reason_text(),
         score(question, None),
         cites_expected_page(question, attempt.answer),
     )
@@ -304,7 +303,7 @@ def _answer_row(record: Record) -> dict[str, object]:
             {
                 "answer": attempt.answer.text,
                 "citations": _citation_rows(attempt.answer),
-                "rejection": f"{attempt.rejection.reason}: {attempt.rejection.detail}",
+                "rejection": attempt.reason_text(),
             }
             for attempt in record.revised
         ],

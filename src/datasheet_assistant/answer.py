@@ -94,6 +94,10 @@ class RejectedAttempt:
     answer: Answer
     rejection: Rejected
 
+    def reason_text(self) -> str:
+        """The rejection as the model and the results files read it."""
+        return f"{self.rejection.reason}: {self.rejection.detail}"
+
 
 class AnswerError(Exception):
     """The model gave no usable answer: the request failed, was refused or
@@ -125,10 +129,12 @@ def answer_question(
         {"role": "user", "content": _prompt(question, chunks)}
     ]
     for attempt in rejected:
-        rejection = f"{attempt.rejection.reason}: {attempt.rejection.detail}"
         messages.append({"role": "assistant", "content": _serialise(attempt.answer)})
         messages.append(
-            {"role": "user", "content": REVISION_PROMPT.format(rejection=rejection)}
+            {
+                "role": "user",
+                "content": REVISION_PROMPT.format(rejection=attempt.reason_text()),
+            }
         )
     return _request(client, SYSTEM_PROMPT, messages)
 
