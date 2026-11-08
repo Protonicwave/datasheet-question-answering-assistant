@@ -1,0 +1,11 @@
+{"id": "bme280-i2c-address-sdo-gnd", "question": "What is the I2C slave address of the BME280 when SDO is connected to GND?", "datasheet": "bme280", "answerable": true, "pages": [32], "numbers": ["0x76"], "keywords": []}
+{"id": "bme280-pressure-range", "question": "What is the operating pressure range of the BME280?", "datasheet": "bme280", "answerable": true, "pages": [2, 10, 11], "numbers": ["300", "1100"], "keywords": ["hPa"]}
+{"id": "bmp390-max-vddio", "question": "What is the maximum interface supply voltage VDDIO of the BMP390?", "datasheet": "bmp390", "answerable": true, "pages": [3, 7], "numbers": ["3.6"], "keywords": []}
+{"id": "bmp390-absolute-accuracy", "question": "What is the typical absolute pressure accuracy of the BMP390?", "datasheet": "bmp390", "answerable": true, "pages": [3], "numbers": ["50"], "keywords": ["Pa"]}
+{"id": "bmi270-chip-id", "question": "What value does the CHIP_ID register of the BMI270 return?", "datasheet": "bmi270", "answerable": true, "pages": [17, 74, 75], "numbers": ["0x24"], "keywords": []}
+{"id": "bmi270-footprint", "question": "What is the package footprint of the BMI270?", "datasheet": "bmi270", "answerable": true, "pages": [2], "numbers": ["2.5", "3.0"], "keywords": []}
+{"id": "bmm350-chip-id", "question": "What is the reset value of the CHIP_ID register of the BMM350?", "datasheet": "bmm350", "answerable": true, "pages": [28], "numbers": ["0x33"], "keywords": []}
+{"id": "bmm350-package-height", "question": "What is the package height of the BMM350?", "datasheet": "bmm350", "answerable": true, "pages": [2, 3], "numbers": ["0.5"], "keywords": []}
+{"id": "bmm350-digital-interfaces", "question": "Which digital interfaces does the BMM350 offer?", "datasheet": "bmm350", "answerable": true, "pages": [2], "numbers": [], "keywords": ["I2C", "I3C"]}
+{"id": "bme280-unit-price", "question": "What is the unit price of the BME280 in quantities of 1,000?", "datasheet": "bme280", "answerable": false}
+{"id": "bmm350-mtbf", "question": "What is the mean time between failures of the BMM350 in hours?", "datasheet": "bmm350", "answerable": false}
