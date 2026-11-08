@@ -62,10 +62,13 @@ def test_origin_tracking_form_matches_normalise(raw: str, expected: str) -> None
 
 
 def test_origins_point_back_into_the_raw_text() -> None:
-    raw = "  tempera-\nture ﬁlter"
+    raw = "  tempera-\nture \N{LATIN SMALL LIGATURE FI}lter"
 
     text, origins = normalise_with_origins(raw)
 
     assert text == "temperature filter"
     # The ligature expands to two characters, both from the one raw character.
-    assert "".join(raw[origin] for origin in origins) == "temperature ﬁﬁlter"
+    assert (
+        "".join(raw[origin] for origin in origins)
+        == "temperature \N{LATIN SMALL LIGATURE FI}\N{LATIN SMALL LIGATURE FI}lter"
+    )

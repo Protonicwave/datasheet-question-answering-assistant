@@ -9,7 +9,11 @@ from datasheet_assistant.answer import AnswerError, RejectedAttempt, Unanswerabl
 from datasheet_assistant.ingest import extract_pages
 from datasheet_assistant.pdf_pages import PdfPages
 from datasheet_assistant.retrieve import Chunk, Index, chunk_pages
-from datasheet_assistant.server import MAX_QUESTION_CHARACTERS, create_app
+from datasheet_assistant.server import (
+    MAX_QUESTION_CHARACTERS,
+    answer_segments,
+    create_app,
+)
 from datasheet_assistant.verify import Answer, Citation
 from tests.pdf_builder import build_pdf
 
@@ -153,12 +157,12 @@ def test_rejects_a_question_outside_the_limits(pdf_dir: Path, question: str) -> 
     assert answerer.calls == 0
 
 
-def test_serves_a_page_as_a_cacheable_png(pdf_dir: Path) -> None:
+def test_serves_a_page_as_a_png_to_revalidate(pdf_dir: Path) -> None:
     response = client_for(pdf_dir, Replies()).get("/api/pages/part/2.png")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
-    assert "immutable" in response.headers["cache-control"]
+    assert response.headers["cache-control"] == "no-cache"
     assert response.content.startswith(b"\x89PNG")
 
 
@@ -177,3 +181,41 @@ def test_lists_each_datasheet_with_its_page_count(pdf_dir: Path) -> None:
     response = client_for(pdf_dir, Replies()).get("/api/datasheets")
 
     assert response.json() == [{"name": "part", "page_count": 2}]
+
+
+def test_a_unicode_minus_in_the_answer_keys_like_the_page_marks() -> None:
+    text = "The range is \N{MINUS SIGN}40 to 85 \N{DEGREE SIGN}C."
+
+    segments = answer_segments(text)
+
+    assert [segment.number for segment in segments if segment.number] == ["-40", "85"]
+    assert "".join(segment.text for segment in segments) == text
+
+
+def test_unchanged_page_is_not_sent_again(pdf_dir: Path) -> None:
+    client = client_for(pdf_dir, Replies())
+    tag = client.get("/api/pages/part/2.png").headers["etag"]
+
+    response = client.get("/api/pages/part/2.png", headers={"If-None-Match": tag})
+
+    assert response.status_code == 304
+    assert response.content == b""
+
+
+def test_replaced_pdf_gets_a_new_tag(pdf_dir: Path) -> None:
+    client = client_for(pdf_dir, Replies())
+    before = client.get("/api/pages/part/2.png").headers["etag"]
+    (pdf_dir / "part.pdf").write_bytes(build_pdf(["Cover page", QUOTE, "Extra"]))
+
+    after = client.get("/api/pages/part/2.png").headers["etag"]
+
+    assert before != after
+
+
+def test_the_web_page_limits_questions_like_the_api() -> None:
+    client_code = Path(__file__).parents[1].joinpath("web/src/api.ts")
+
+    assert (
+        f"MAX_QUESTION_CHARACTERS = {MAX_QUESTION_CHARACTERS};"
+        in client_code.read_text(encoding="utf-8")
+    )

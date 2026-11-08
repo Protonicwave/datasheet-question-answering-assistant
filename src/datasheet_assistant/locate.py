@@ -4,7 +4,7 @@ from collections.abc import Sequence, Set
 from dataclasses import dataclass
 
 from datasheet_assistant.normalise import normalise, normalise_with_origins
-from datasheet_assistant.numbers import Number, number_spans
+from datasheet_assistant.numbers import Number, NumberSpan, number_spans
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,16 +16,11 @@ class TextSpan:
 
 
 @dataclass(frozen=True, slots=True)
-class NumberLocation:
-    value: Number
-    span: TextSpan
-
-
-@dataclass(frozen=True, slots=True)
 class QuoteLocation:
     span: TextSpan
-    numbers: tuple[NumberLocation, ...]
-    """The requested numbers that occur inside the quote, in page order."""
+    numbers: tuple[NumberSpan, ...]
+    """The requested numbers inside the quote, positioned in the page text,
+    in page order."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +40,10 @@ def locate_quote(
     """Find `quote` in `page_text` the way the check matched it, after
     normalisation, and find each occurrence inside it of a value in
     `numbers`. Returns None if the quote is not on the page.
+
+    A quote that occurs more than once is located at its first occurrence.
+    Numbers are read within the quote alone, as the check reads them, so a
+    quote starting "0.3" inside the page's "10.3" marks that "0.3".
     """
     text, origins = normalise_with_origins(page_text)
     target = normalise(quote)
@@ -53,9 +52,10 @@ def locate_quote(
         return None
     end = start + len(target)
     found = tuple(
-        NumberLocation(
+        NumberSpan(
+            origins[start + span.start],
+            origins[start + span.end - 1] + 1,
             span.value,
-            TextSpan(origins[start + span.start], origins[start + span.end - 1] + 1),
         )
         for span in number_spans(text[start:end])
         if span.value in numbers

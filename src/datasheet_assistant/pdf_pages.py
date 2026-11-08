@@ -1,5 +1,6 @@
 """Renders datasheet pages to PNG and places quotes on them, using pdfium."""
 
+import logging
 import struct
 import threading
 import zlib
@@ -17,6 +18,8 @@ from datasheet_assistant.locate import (
     locate_quote,
 )
 from datasheet_assistant.numbers import Number
+
+logger = logging.getLogger(__name__)
 
 # A4 is 595 points wide, so a scale of 2 gives an image about 1190 pixels
 # wide: sharp beside the answer on a laptop screen, about 300 KB per page.
@@ -78,6 +81,13 @@ class PdfPages:
                 text: str = text_page.get_text_range()
                 offsets = utf16_offsets(text)
                 if offsets[-1] != text_page.count_chars():
+                    logger.warning(
+                        "%s page %d: pdfium counts %d characters, text has %d units",
+                        datasheet,
+                        page,
+                        text_page.count_chars(),
+                        offsets[-1],
+                    )
                     return None
                 location = locate_quote(text, quote, numbers)
                 if location is None:
@@ -87,13 +97,24 @@ class PdfPages:
                     _boxes(text_page, offsets, location.span, size),
                     tuple(
                         NumberMarks(
-                            found.value, _boxes(text_page, offsets, found.span, size)
+                            found.value,
+                            _boxes(
+                                text_page,
+                                offsets,
+                                TextSpan(found.start, found.end),
+                                size,
+                            ),
                         )
                         for found in location.numbers
                     ),
                 )
             finally:
                 document.close()
+
+    def version(self, datasheet: str) -> str:
+        """Changes whenever the datasheet's PDF file is replaced."""
+        status = self._path(datasheet).stat()
+        return f"{status.st_size}-{status.st_mtime_ns}"
 
     def _path(self, datasheet: str) -> Path:
         return self._pdf_dir / f"{datasheet}.pdf"

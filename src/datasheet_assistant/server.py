@@ -6,15 +6,16 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Literal, assert_never
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, StringConstraints
 
 from datasheet_assistant.answer import AnswerError, RejectedAttempt, Unanswerable
 from datasheet_assistant.locate import Box
+from datasheet_assistant.normalise import normalise_with_origins
 from datasheet_assistant.numbers import Number, extract_numbers, number_spans
 from datasheet_assistant.pdf_pages import PdfPages
-from datasheet_assistant.pipeline import Answerer, ask
+from datasheet_assistant.pipeline import Answerer, Checked, ask
 from datasheet_assistant.retrieve import Index
 from datasheet_assistant.verify import Answer, Rejected, RejectionReason, Verified
 
@@ -23,8 +24,9 @@ logger = logging.getLogger(__name__)
 # Datasheet questions are a sentence or two; a cap keeps one request from
 # filling the prompt.
 MAX_QUESTION_CHARACTERS = 500
-# The PDFs are pinned by hash, so a rendered page never changes.
-PAGE_CACHE_CONTROL = "public, max-age=86400, immutable"
+# Browsers revalidate each page against an ETag tied to the PDF file, so a
+# re-ingested datasheet is never shown from a stale image under new marks.
+PAGE_CACHE_CONTROL = "no-cache"
 
 Question = Annotated[
     str,
@@ -96,7 +98,13 @@ def create_app(
     pdf_pages: PdfPages,
     web_dir: Path | None,
 ) -> FastAPI:
-    """The API under /api and, if `web_dir` is given, the built web page."""
+    """The API under /api and, if `web_dir` is given, the built web page.
+
+    Meant for one person on this machine: concurrent questions are not
+    limited beyond the server's thread pool, and each spends API credit.
+    Locating quotes costs one PDF read per citation, bounded by the model's
+    output limit and serialised by the pdfium lock.
+    """
     app = FastAPI(title="Datasheet assistant")
 
     @app.post("/api/ask")
@@ -106,21 +114,7 @@ def create_app(
         except AnswerError as error:
             logger.warning("answer failed: %s", error)
             raise HTTPException(status_code=502, detail=str(error)) from error
-        drafts = [_draft(attempt, pages, pdf_pages) for attempt in checked.revised]
-        match checked.final:
-            case Verified(answer):
-                return AskResponse(
-                    outcome="verified",
-                    answer=_draft_body(answer, None, pages, pdf_pages),
-                    drafts=drafts,
-                )
-            case RejectedAttempt() as attempt:
-                drafts.append(_draft(attempt, pages, pdf_pages))
-                return AskResponse(outcome="withheld", answer=None, drafts=drafts)
-            case Unanswerable():
-                return AskResponse(outcome="unanswerable", answer=None, drafts=drafts)
-            case _:
-                assert_never(checked.final)
+        return _ask_response(checked, pages, pdf_pages)
 
     @app.get("/api/datasheets")
     def list_datasheets() -> list[DatasheetBody]:
@@ -130,16 +124,22 @@ def create_app(
         ]
 
     @app.get("/api/pages/{datasheet}/{page}.png")
-    def page_image(datasheet: str, page: int) -> Response:
+    def page_image(datasheet: str, page: int, request: Request) -> Response:
         page_count = len(pages.get(datasheet, ()))
         if not 1 <= page <= page_count:
             raise HTTPException(
                 status_code=404, detail=f"no page {page} in datasheet {datasheet!r}"
             )
+        headers = {
+            "Cache-Control": PAGE_CACHE_CONTROL,
+            "ETag": f'"{datasheet}-{page}-{pdf_pages.version(datasheet)}"',
+        }
+        if request.headers.get("If-None-Match") == headers["ETag"]:
+            return Response(status_code=304, headers=headers)
         return Response(
             content=pdf_pages.render_png(datasheet, page),
             media_type="image/png",
-            headers={"Cache-Control": PAGE_CACHE_CONTROL},
+            headers=headers,
         )
 
     if web_dir is not None:
@@ -147,12 +147,29 @@ def create_app(
     return app
 
 
-def _draft(
-    attempt: RejectedAttempt,
-    pages: Mapping[str, Sequence[str]],
-    pdf_pages: PdfPages,
-) -> DraftBody:
-    return _draft_body(attempt.answer, attempt.rejection, pages, pdf_pages)
+def _ask_response(
+    checked: Checked, pages: Mapping[str, Sequence[str]], pdf_pages: PdfPages
+) -> AskResponse:
+    drafts = [
+        _draft_body(attempt.answer, attempt.rejection, pages, pdf_pages)
+        for attempt in checked.revised
+    ]
+    match checked.final:
+        case Verified(answer):
+            return AskResponse(
+                outcome="verified",
+                answer=_draft_body(answer, None, pages, pdf_pages),
+                drafts=drafts,
+            )
+        case RejectedAttempt() as attempt:
+            drafts.append(
+                _draft_body(attempt.answer, attempt.rejection, pages, pdf_pages)
+            )
+            return AskResponse(outcome="withheld", answer=None, drafts=drafts)
+        case Unanswerable():
+            return AskResponse(outcome="unanswerable", answer=None, drafts=drafts)
+        case _:
+            assert_never(checked.final)
 
 
 def _draft_body(
@@ -190,7 +207,7 @@ def _draft_body(
             )
         )
     return DraftBody(
-        segments=_segments(answer.text),
+        segments=answer_segments(answer.text),
         citations=citations,
         rejection=None
         if rejection is None
@@ -198,20 +215,24 @@ def _draft_body(
     )
 
 
-def _segments(text: str) -> list[SegmentBody]:
+def answer_segments(text: str) -> list[SegmentBody]:
     """`text` split into plain runs and numbers, in order, so the page can
-    link each number in the answer to the same value on the datasheet page."""
+    link each number in the answer to the same value on the datasheet page.
+
+    Numbers are read from the normalised text, as the check reads them, so
+    a Unicode minus gives the same key as the page marks.
+    """
+    normalised, origins = normalise_with_origins(text)
     segments = []
     position = 0
-    for span in number_spans(text):
-        if span.start > position:
-            segments.append(SegmentBody(text=text[position : span.start], number=None))
+    for span in number_spans(normalised):
+        start, end = origins[span.start], origins[span.end - 1] + 1
+        if start > position:
+            segments.append(SegmentBody(text=text[position:start], number=None))
         segments.append(
-            SegmentBody(
-                text=text[span.start : span.end], number=_number_key(span.value)
-            )
+            SegmentBody(text=text[start:end], number=_number_key(span.value))
         )
-        position = span.end
+        position = end
     if position < len(text):
         segments.append(SegmentBody(text=text[position:], number=None))
     return segments

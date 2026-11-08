@@ -29,16 +29,16 @@ def test_finds_only_the_requested_numbers_inside_the_quote() -> None:
     location = locate_quote(PAGE, "Sleep current IDDSL 0.1 0.3 µA", {Decimal("0.1")})
 
     assert location is not None
-    assert [(found.value, spanned(PAGE, found.span)) for found in location.numbers] == [
-        (Decimal("0.1"), "0.1")
-    ]
+    assert [
+        (found.value, PAGE[found.start : found.end]) for found in location.numbers
+    ] == [(Decimal("0.1"), "0.1")]
 
 
 def test_matches_numbers_by_value() -> None:
     location = locate_quote(PAGE, "IDDSB 0.2 0.5 µA", {Decimal("0.50")})
 
     assert location is not None
-    assert [spanned(PAGE, found.span) for found in location.numbers] == ["0.5"]
+    assert [PAGE[found.start : found.end] for found in location.numbers] == ["0.5"]
 
 
 def test_quote_not_on_the_page_is_not_found() -> None:
@@ -79,3 +79,12 @@ def test_empty_boxes_are_skipped() -> None:
     generated_space = Box(0.3, 0.5, 0.3, 0.5)
 
     assert line_boxes([generated_space]) == []
+
+
+def test_a_repeated_quote_is_located_at_its_first_occurrence() -> None:
+    page = "Supply voltage 3.6 V max. Supply voltage 3.6 V max."
+
+    location = locate_quote(page, "Supply voltage 3.6 V", set())
+
+    assert location is not None
+    assert location.span == TextSpan(0, 20)
