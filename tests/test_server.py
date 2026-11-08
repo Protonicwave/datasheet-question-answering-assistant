@@ -171,3 +171,9 @@ def test_page_outside_the_datasheets_is_not_found(pdf_dir: Path, path: str) -> N
     response = client_for(pdf_dir, Replies()).get(path)
 
     assert response.status_code == 404
+
+
+def test_lists_each_datasheet_with_its_page_count(pdf_dir: Path) -> None:
+    response = client_for(pdf_dir, Replies()).get("/api/datasheets")
+
+    assert response.json() == [{"name": "part", "page_count": 2}]

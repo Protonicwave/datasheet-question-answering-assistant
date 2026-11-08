@@ -75,6 +75,11 @@ class DraftBody(BaseModel):
     rejection: RejectionBody | None
 
 
+class DatasheetBody(BaseModel):
+    name: str
+    page_count: int
+
+
 class AskResponse(BaseModel):
     outcome: Literal["verified", "withheld", "unanswerable"]
     answer: DraftBody | None
@@ -116,6 +121,13 @@ def create_app(
                 return AskResponse(outcome="unanswerable", answer=None, drafts=drafts)
             case _:
                 assert_never(checked.final)
+
+    @app.get("/api/datasheets")
+    def list_datasheets() -> list[DatasheetBody]:
+        return [
+            DatasheetBody(name=name, page_count=len(texts))
+            for name, texts in sorted(pages.items())
+        ]
 
     @app.get("/api/pages/{datasheet}/{page}.png")
     def page_image(datasheet: str, page: int) -> Response:

@@ -39,6 +39,26 @@ datasheet does not say." If the answer and its revision both fail the
 check, it prints "No verified answer." with the reason the answer was
 withheld: the datasheet may still state it.
 
+## Web page
+
+The web page shows each answer beside the rendered datasheet page, with the
+quoted passage highlighted; hovering a number in the answer marks it on the
+page. A withheld answer is hidden, and the page its last draft cited is
+shown with the passage outlined. Building the page needs Node.js 22 or
+later:
+
+```sh
+cd web
+npm ci
+npm run build
+cd ..
+uv run datasheet-assistant serve
+```
+
+Then open <http://127.0.0.1:8000>. `serve` listens on this machine only and
+takes `--port` to change the port. While working on the page, run
+`npm run dev` in `web/` beside `serve`; Vite forwards `/api` to it.
+
 ## Evaluate
 
 Run a question set through four arms: the model alone (A), the model
@@ -85,4 +105,14 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy
 uv run vulture src --min-confidence 80
+```
+
+From `web/`:
+
+```sh
+npm test
+npm run lint
+npm run typecheck
+npx knip
+npm run build
 ```
