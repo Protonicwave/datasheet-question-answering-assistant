@@ -3,7 +3,7 @@
 import struct
 import threading
 import zlib
-from collections.abc import Set
+from collections.abc import Sequence, Set
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +23,7 @@ from datasheet_assistant.numbers import Number
 RENDER_SCALE = 2.0
 PNG_COMPRESSION_LEVEL = 6
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+MAX_BMP_CODE_POINT = 0xFFFF
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,18 +76,19 @@ class PdfPages:
                 pdf_page = document[page - 1]
                 text_page = pdf_page.get_textpage()
                 text: str = text_page.get_text_range()
-                # Text positions double as pdfium character indices only
-                # when every character is one code point.
-                if len(text) != text_page.count_chars():
+                offsets = utf16_offsets(text)
+                if offsets[-1] != text_page.count_chars():
                     return None
                 location = locate_quote(text, quote, numbers)
                 if location is None:
                     return None
                 size = pdf_page.get_size()
                 return PageMarks(
-                    _boxes(text_page, location.span, size),
+                    _boxes(text_page, offsets, location.span, size),
                     tuple(
-                        NumberMarks(found.value, _boxes(text_page, found.span, size))
+                        NumberMarks(
+                            found.value, _boxes(text_page, offsets, found.span, size)
+                        )
                         for found in location.numbers
                     ),
                 )
@@ -97,8 +99,24 @@ class PdfPages:
         return self._pdf_dir / f"{datasheet}.pdf"
 
 
+def utf16_offsets(text: str) -> list[int]:
+    """The pdfium character index of each position in `text`, and of its end.
+
+    pdfium counts characters in UTF-16 units, so a character outside the
+    Basic Multilingual Plane, such as a mathematical italic letter, takes
+    two indices while Python counts it once.
+    """
+    offsets = [0]
+    for character in text:
+        offsets.append(offsets[-1] + (2 if ord(character) > MAX_BMP_CODE_POINT else 1))
+    return offsets
+
+
 def _boxes(
-    text_page: Any, span: TextSpan, page_size: tuple[float, float]
+    text_page: Any,
+    offsets: Sequence[int],
+    span: TextSpan,
+    page_size: tuple[float, float],
 ) -> tuple[Box, ...]:
     """One box per line of the characters in `span`. `text_page` is a
     pdfium text page, which has no type information."""
@@ -107,7 +125,7 @@ def _boxes(
         line_boxes(
             [
                 _box(text_page.get_charbox(index), width, height)
-                for index in range(span.start, span.end)
+                for index in range(offsets[span.start], offsets[span.end])
             ]
         )
     )

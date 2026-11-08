@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from datasheet_assistant.pdf_pages import PdfPages
+from datasheet_assistant.pdf_pages import PdfPages, utf16_offsets
 from tests.pdf_builder import build_pdf
 
 # build_pdf pages are US Letter, 612 by 792 points.
@@ -47,3 +47,11 @@ def test_marks_the_quote_and_its_numbers_near_the_top(pdf_pages: PdfPages) -> No
 
 def test_quote_from_another_page_has_no_marks(pdf_pages: PdfPages) -> None:
     assert pdf_pages.mark("part", 1, "IDDSL 0.1 0.3 uA", set()) is None
+
+
+def test_utf16_offsets_count_a_character_beyond_the_bmp_twice() -> None:
+    assert utf16_offsets("a\U0001d70fb") == [0, 1, 3, 4]
+
+
+def test_utf16_offsets_of_empty_text() -> None:
+    assert utf16_offsets("") == [0]
